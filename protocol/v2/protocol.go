@@ -65,14 +65,15 @@ func (inst *instruction) packetBytes() ([]byte, error) {
 	if len(inst.params) > 0 {
 		copy(packet[8:], inst.params)
 	}
-	// CRC
-	packet[7+length-2], packet[7+length-1] = genPacketCRCBytes(packet)
+	// write CRC bytes to packet slice
+	updatePacketCRCBytes(packet)
 
 	return packet, nil
 }
 
 func parseStatusPacket(packet []byte) (status, error) {
-	if len(packet) < minStatusLen {
+	l := len(packet)
+	if l < minStatusLen {
 		return status{}, errTruncatedStatus
 	}
 
@@ -81,12 +82,12 @@ func parseStatusPacket(packet []byte) (status, error) {
 	}
 
 	length := uint16(packet[5]) + uint16(packet[6])<<8
-	if length < minStatusLengthVal || length > uint16(len(packet)-7) {
+	if length < minStatusLengthVal || length > uint16(l-7) {
 		return status{}, errInvalidStatusLength
 	}
 
-	crcL, crcH := genPacketCRCBytes(packet)
-	if packet[length+6] != crcH || packet[length+5] != crcL {
+	crc := packetCRC(packet[:l-2])
+	if packet[length+5] != byte(crc) || packet[length+6] != byte(crc>>8) {
 		return status{}, errStatusCRCInvalid
 	}
 
@@ -125,7 +126,13 @@ func parseProcessingErr(errByte byte) error {
 	return nil
 }
 
-func genPacketCRCBytes(packet []byte) (byte, byte) {
+func updatePacketCRCBytes(packet []byte) {
+	l := len(packet)
+	crc := packetCRC(packet[:l-2])
+	packet[l-2], packet[l-1] = byte(crc), byte(crc>>8)
+}
+
+func packetCRC(packet []byte) uint16 {
 	table := [256]uint16{
 		0x0000, 0x8005, 0x800F, 0x000A, 0x801B, 0x001E, 0x0014, 0x8011,
 		0x8033, 0x0036, 0x003C, 0x8039, 0x0028, 0x802D, 0x8027, 0x0022,
@@ -161,10 +168,9 @@ func genPacketCRCBytes(packet []byte) (byte, byte) {
 		0x8213, 0x0216, 0x021C, 0x8219, 0x0208, 0x820D, 0x8207, 0x0202,
 	}
 	var crc uint16
-	for j := 0; j < len(packet)-2; j++ {
+	for j := 0; j < len(packet); j++ {
 		i := ((crc >> 8) ^ uint16(packet[j]))
 		crc = (crc << 8) ^ table[i]
 	}
-
-	return byte(crc), byte(crc >> 8)
+	return crc
 }
