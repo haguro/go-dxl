@@ -129,3 +129,60 @@ func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 
 	return r.params, nil
 }
+
+func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
+	params := make([]byte, 0, 2+len(data))
+	params = append(append(params, byte(addr), byte(addr>>8)), data...)
+
+	if err := h.writeInstruction(id, write, params...); err != nil {
+		return fmt.Errorf("failed to send write instruction: %w", err)
+	}
+	if id != BroadcastID {
+		r, err := h.readStatus()
+		if err != nil {
+			return fmt.Errorf("failed to parse write status: %w", err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("device ID %d returned processing error: %w", id, r.err)
+		}
+	}
+	return nil
+}
+
+func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
+	params := make([]byte, 0, 2+len(data))
+	params = append(append(params, byte(addr), byte(addr>>8)), data...)
+
+	if err := h.writeInstruction(id, regWrite, params...); err != nil {
+		return fmt.Errorf("failed to send write instruction: %w", err)
+	}
+	if id != BroadcastID {
+		r, err := h.readStatus()
+		if err != nil {
+			return fmt.Errorf("failed to parse write status: %w", err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("device ID %d returned processing error: %w", id, r.err)
+		}
+	}
+	return nil
+}
+
+func (h *Handler) Action(id byte) error {
+	if err := h.writeInstruction(id, action); err != nil {
+		return fmt.Errorf("failed to write instruction: %w", err)
+	}
+
+	if id != BroadcastID {
+		r, err := h.readStatus()
+		if err != nil {
+			return fmt.Errorf("failed to read/parse status: %w", err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("device ID %d returned processing error: %w", id, r.err)
+		}
+	}
+
+	return nil
+}
+

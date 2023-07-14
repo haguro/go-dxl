@@ -9,10 +9,10 @@ import (
 )
 
 var deviceConfig = protocol.MockDeviceConfig{
-	ID:           0x99,
-	ModelNumber:  0x0424,
-	FirmwareVer:  0x2F,
-	ControlTable: []byte{0x32, 0x14, 0xF0, 0xE9, 0xA9, 0x7C},
+	ID:               0x99,
+	ModelNumber:      0x424,
+	FirmwareVer:      0x2F,
+	MockControlTable: []byte{0x32, 0x14, 0xF0, 0xE9, 0xA9, 0x7C},
 }
 
 func TestFlush(t *testing.T) {
@@ -58,8 +58,57 @@ func TestRead(t *testing.T) {
 		t.Fatalf("Expected no error, got %q", err)
 	}
 
-	want := deviceConfig.ControlTable[addr : addr+length]
+	want := deviceConfig.MockControlTable[addr : addr+length]
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Expected %+v, got %+v", want, got)
+	}
+}
+
+func TestWrite(t *testing.T) {
+	d := protocol.NewMockDevice(deviceConfig)
+	h := protocol.NewHandler(d)
+	addr := 4
+	data := []byte{0xF1, 0xF2}
+	if err := h.Write(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+
+	got := d.InspectControlTable(addr, len(data))
+	if !reflect.DeepEqual(got, data) {
+		t.Errorf("Expected %+v, got %+v", data, got)
+	}
+}
+
+func TestRegWrite(t *testing.T) {
+	d := protocol.NewMockDevice(deviceConfig)
+	h := protocol.NewHandler(d)
+	addr := 4
+	data := []byte{0xF1, 0xF2}
+	if err := h.RegWrite(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+
+	want := append([]byte{byte(addr), byte(addr >> 8)}, data...)
+	got := d.InspectRegWriteBuffer()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Expected RegWrite to not change control table, got %+v", got)
+	}
+}
+
+func TestAction(t *testing.T) {
+	d := protocol.NewMockDevice(deviceConfig)
+	h := protocol.NewHandler(d)
+	addr := 4
+	data := []byte{0xF1, 0xF2}
+	if err := h.RegWrite(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+	if err := h.Action(byte(deviceConfig.ID)); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+
+	got := d.InspectControlTable(addr, len(data))
+	if !reflect.DeepEqual(got, data) {
+		t.Errorf("Expected %+v, got %+v", data, got)
 	}
 }
