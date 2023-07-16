@@ -10,7 +10,7 @@ type MockDeviceConfig struct {
 	ID                 int
 	ModelNumber        int
 	FirmwareVer        int
-	MockControlTable   []byte
+	ControlTableRAM    []byte
 	InstructionTimeout time.Duration
 	InternalDelay      time.Duration //Additional to the status delay configured in the control table
 }
@@ -20,7 +20,7 @@ type MockDevice struct {
 	id             byte
 	model          uint16
 	fw             byte
-	mockCT         []byte
+	ctRAM          []byte
 	regWriteBuf    []byte
 	regInstruction bool
 	timeout        time.Duration
@@ -41,8 +41,8 @@ func NewMockDevice(config MockDeviceConfig) *MockDevice {
 		timeout: config.InstructionTimeout,
 		delay:   config.InternalDelay,
 	}
-	d.mockCT = make([]byte, len(config.MockControlTable))
-	copy(d.mockCT, config.MockControlTable)
+	d.ctRAM = make([]byte, len(config.ControlTableRAM))
+	copy(d.ctRAM, config.ControlTableRAM)
 	return &d
 }
 
@@ -77,7 +77,7 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 			return pLen, nil
 		}
 		addr, l := uint16(p[8])+uint16(p[9])<<8, uint16(p[10])+uint16(p[11])<<8
-		params = d.mockCT[addr : addr+l]
+		params = d.ctRAM[addr : addr+l]
 	case write:
 		if instLength < 6 {
 			//TODO return processing error when length is < 6 and larger than 5
@@ -85,7 +85,7 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		}
 		addr := int(p[8]) + int(p[9])<<8
 		for i := 0; i < int(instLength)-5; i++ {
-			d.mockCT[addr+i] = p[10+i]
+			d.ctRAM[addr+i] = p[10+i]
 		}
 	case regWrite:
 		if instLength < 6 {
@@ -104,12 +104,11 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		}
 		addr := int(d.regWriteBuf[0]) + int(d.regWriteBuf[1])<<8
 		for i := 0; i < len(d.regWriteBuf)-2; i++ {
-			d.mockCT[addr+i] = d.regWriteBuf[2+i]
+			d.ctRAM[addr+i] = d.regWriteBuf[2+i]
 		}
 		d.regWriteBuf = []byte{}
 		d.regInstruction = false
-	case reset, reboot, clear, backup, syncRead, syncWrite, fastSWrite, bulkRead, bulkWrite, fastBRead:
-		panic(fmt.Sprintf("TODO handle instruction %xd", cmd))
+		panic(fmt.Sprintf("TODO handle instruction %x", cmd))
 	default:
 		errByte = 0x02
 	}
@@ -133,8 +132,8 @@ func (d *MockDevice) InspectRegWriteBuffer() []byte {
 }
 
 func (d *MockDevice) InspectControlTable(index, length int) []byte {
-	if index+length > len(d.mockCT) {
+	if index+length > len(d.ctRAM) {
 		return nil
 	}
-	return d.mockCT[index : index+length]
+	return d.ctRAM[index : index+length]
 }

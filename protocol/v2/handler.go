@@ -3,10 +3,22 @@ package protocol
 import (
 	"fmt"
 	"io"
+	"log"
 )
 
+const (
+	NoLogging byte = 0
+	LogRead   byte = 1 << iota
+	LogWrite
+	LogReadWrite = LogRead | LogWrite
+)
+
+// Handler provides a high level API for interacting with Dynamixel devices
+// over a communication interface. It handles constructing protocol packets,
+// sending instructions, and parsing status responses.
 type Handler struct {
-	rw io.ReadWriter
+	rw      io.ReadWriter
+	logOpts byte
 }
 
 type PingResponse struct {
@@ -15,9 +27,10 @@ type PingResponse struct {
 	Firmware byte
 }
 
-func NewHandler(rw io.ReadWriter) *Handler {
+func NewHandler(rw io.ReadWriter, logPacketOpts byte) *Handler {
 	return &Handler{
-		rw: rw,
+		rw:      rw,
+		logOpts: logPacketOpts,
 	}
 }
 
@@ -27,6 +40,9 @@ func (h *Handler) writeInstruction(id, command byte, params ...byte) error {
 	packet, err := inst.packetBytes()
 	if err != nil {
 		return fmt.Errorf("failed to write instruction packet bytes: %w", err)
+	}
+	if h.logOpts&LogWrite != 0 {
+		logPacket(packet)
 	}
 	_, err = h.rw.Write(packet)
 	if err != nil {
@@ -72,6 +88,10 @@ func (h *Handler) readStatus() (status, error) {
 	}
 
 	packet = append(packet, instErrParamsCRC...)
+
+	if h.logOpts&LogRead != 0 {
+		logPacket(packet)
+	}
 
 	return parseStatusPacket(packet)
 }
@@ -131,8 +151,9 @@ func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 }
 
 func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
-	params := make([]byte, 0, 2+len(data))
-	params = append(append(params, byte(addr), byte(addr>>8)), data...)
+	params := make([]byte, 2+len(data))
+	params = append(params, byte(addr), byte(addr>>8))
+	params = append(params, data...)
 
 	if err := h.writeInstruction(id, write, params...); err != nil {
 		return fmt.Errorf("failed to send write instruction: %w", err)
@@ -143,7 +164,7 @@ func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
 			return fmt.Errorf("failed to parse write status: %w", err)
 		}
 		if r.err != nil {
-			return fmt.Errorf("device ID %d returned processing error: %w", id, r.err)
+			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
 		}
 	}
 	return nil
@@ -162,7 +183,7 @@ func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
 			return fmt.Errorf("failed to parse write status: %w", err)
 		}
 		if r.err != nil {
-			return fmt.Errorf("device ID %d returned processing error: %w", id, r.err)
+			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
 		}
 	}
 	return nil
@@ -179,10 +200,21 @@ func (h *Handler) Action(id byte) error {
 			return fmt.Errorf("failed to read/parse status: %w", err)
 		}
 		if r.err != nil {
-			return fmt.Errorf("device ID %d returned processing error: %w", id, r.err)
+			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
 		}
 	}
 
 	return nil
 }
 
+func logPacket(packet []byte) {
+	n := len(packet)
+	inHex := "["
+	for i := 0; i < n; i++ {
+		inHex += fmt.Sprintf("%02X", packet[i])
+		if i < n-1 {
+			inHex += "|"
+		}
+	}
+	log.Println(inHex + "]")
+}

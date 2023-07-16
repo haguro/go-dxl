@@ -9,15 +9,15 @@ import (
 )
 
 var deviceConfig = protocol.MockDeviceConfig{
-	ID:               0x99,
-	ModelNumber:      0x424,
-	FirmwareVer:      0x2F,
-	MockControlTable: []byte{0x32, 0x14, 0xF0, 0xE9, 0xA9, 0x7C},
+	ID:              0x99,
+	ModelNumber:     0x424,
+	FirmwareVer:     0x2F,
+	ControlTableRAM: []byte{0x32, 0x14, 0xF0, 0xE9, 0xA9, 0x7C},
 }
 
 func TestFlush(t *testing.T) {
 	b := bytes.NewBuffer(make([]byte, 10))
-	h := protocol.NewHandler(b)
+	h := protocol.NewHandler(b, protocol.NoLogging)
 
 	if err := h.Flush(); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
@@ -30,7 +30,7 @@ func TestFlush(t *testing.T) {
 
 func TestPing(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
-	h := protocol.NewHandler(d)
+	h := protocol.NewHandler(d, protocol.NoLogging)
 
 	got, err := h.Ping(byte(deviceConfig.ID))
 	if err != nil {
@@ -50,7 +50,7 @@ func TestPing(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
-	h := protocol.NewHandler(d)
+	h := protocol.NewHandler(d, protocol.NoLogging)
 	addr, length := 3, 2
 
 	got, err := h.Read(byte(deviceConfig.ID), uint16(addr), uint16(length))
@@ -58,7 +58,7 @@ func TestRead(t *testing.T) {
 		t.Fatalf("Expected no error, got %q", err)
 	}
 
-	want := deviceConfig.MockControlTable[addr : addr+length]
+	want := deviceConfig.ControlTableRAM[addr : addr+length]
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Expected %+v, got %+v", want, got)
 	}
@@ -66,7 +66,7 @@ func TestRead(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
-	h := protocol.NewHandler(d)
+	h := protocol.NewHandler(d, protocol.NoLogging)
 	addr := 4
 	data := []byte{0xF1, 0xF2}
 	if err := h.Write(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
@@ -81,7 +81,7 @@ func TestWrite(t *testing.T) {
 
 func TestRegWrite(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
-	h := protocol.NewHandler(d)
+	h := protocol.NewHandler(d, protocol.NoLogging)
 	addr := 4
 	data := []byte{0xF1, 0xF2}
 	if err := h.RegWrite(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
@@ -97,7 +97,7 @@ func TestRegWrite(t *testing.T) {
 
 func TestAction(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
-	h := protocol.NewHandler(d)
+	h := protocol.NewHandler(d, protocol.NoLogging)
 	addr := 4
 	data := []byte{0xF1, 0xF2}
 	if err := h.RegWrite(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
