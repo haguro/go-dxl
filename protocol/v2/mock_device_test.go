@@ -108,6 +108,21 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		}
 		d.regWriteBuf = []byte{}
 		d.regInstruction = false
+	case reboot:
+		for i := range d.ctRAM {
+			d.ctRAM[i] = 0
+		}
+	case clear:
+		if instLength < 8 {
+			//TODO return processing error status when length is < 6 and larger than 5
+			return pLen, nil
+		}
+		//TODO verify fixed bytes and option
+		switch p[8] {
+		case ClearMultiRotationPos:
+			d.ctRAM[1], d.ctRAM[2], d.ctRAM[3] = d.ctRAM[1]&0x0F, 0, 0
+		}
+	case reset, backup, syncRead, syncWrite, fastSyncRead, bulkRead, bulkWrite, fastBRead:
 		panic(fmt.Sprintf("TODO handle instruction %x", cmd))
 	default:
 		errByte = 0x02

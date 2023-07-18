@@ -112,3 +112,31 @@ func TestAction(t *testing.T) {
 		t.Errorf("Expected %+v, got %+v", data, got)
 	}
 }
+
+func TestReboot(t *testing.T) {
+	d := protocol.NewMockDevice(deviceConfig)
+	h := protocol.NewHandler(d, protocol.NoLogging)
+	if err := h.Reboot(byte(deviceConfig.ID)); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+
+	want := make([]byte, len(deviceConfig.ControlTableRAM))
+	got := d.InspectControlTable(0, len(deviceConfig.ControlTableRAM))
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Expected %+v, got %+v", want, got)
+	}
+}
+
+func TestClear(t *testing.T) {
+	d := protocol.NewMockDevice(deviceConfig)
+	h := protocol.NewHandler(d, protocol.NoLogging)
+	if err := h.Clear(byte(deviceConfig.ID), protocol.ClearMultiRotationPos); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+
+	want := []byte{0x32, 0x04, 0, 0}
+	got := d.InspectControlTable(0, 4)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Expected %+v, got %+v", want, got)
+	}
+}

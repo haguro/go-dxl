@@ -13,6 +13,8 @@ const (
 	LogReadWrite = LogRead | LogWrite
 )
 
+const ClearMultiRotationPos byte = 0x01
+
 // Handler provides a high level API for interacting with Dynamixel devices
 // over a communication interface. It handles constructing protocol packets,
 // sending instructions, and parsing status responses.
@@ -191,6 +193,42 @@ func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
 
 func (h *Handler) Action(id byte) error {
 	if err := h.writeInstruction(id, action); err != nil {
+		return fmt.Errorf("failed to write instruction: %w", err)
+	}
+
+	if id != BroadcastID {
+		r, err := h.readStatus()
+		if err != nil {
+			return fmt.Errorf("failed to read/parse status: %w", err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
+		}
+	}
+
+	return nil
+}
+
+func (h *Handler) Reboot(id byte) error {
+	if err := h.writeInstruction(id, reboot); err != nil {
+		return fmt.Errorf("failed to write instruction: %w", err)
+	}
+
+	if id != BroadcastID {
+		r, err := h.readStatus()
+		if err != nil {
+			return fmt.Errorf("failed to read/parse status: %w", err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
+		}
+	}
+
+	return nil
+}
+
+func (h *Handler) Clear(id, option byte) error {
+	if err := h.writeInstruction(id, clear, option, 0x44, 0x58, 0x4C, 0x22); err != nil {
 		return fmt.Errorf("failed to write instruction: %w", err)
 	}
 
