@@ -16,22 +16,22 @@ const (
 
 // Command (instruction) codes
 const (
-	ping       byte = 0x01
-	read       byte = 0x02
-	write      byte = 0x03
-	regWrite   byte = 0x04
-	action     byte = 0x05
-	reset      byte = 0x06
-	reboot     byte = 0x08
-	clear      byte = 0x10
-	backup     byte = 0x20
-	statusCmd  byte = 0x55
-	syncRead   byte = 0x82
-	syncWrite  byte = 0x83
-	fastSWrite byte = 0x8A
-	bulkRead   byte = 0x92
-	bulkWrite  byte = 0x93
-	fastBRead  byte = 0x9A
+	ping         byte = 0x01
+	read         byte = 0x02
+	write        byte = 0x03
+	regWrite     byte = 0x04
+	action       byte = 0x05
+	reset        byte = 0x06
+	reboot       byte = 0x08
+	clear        byte = 0x10
+	backup       byte = 0x20
+	statusCmd    byte = 0x55
+	syncRead     byte = 0x82
+	syncWrite    byte = 0x83
+	fastSyncRead byte = 0x8A
+	bulkRead     byte = 0x92
+	bulkWrite    byte = 0x93
+	fastBulkRead byte = 0x9A
 )
 
 type instruction struct {

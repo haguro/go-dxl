@@ -153,8 +153,7 @@ func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 }
 
 func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
-	params := make([]byte, 2+len(data))
-	params = append(params, byte(addr), byte(addr>>8))
+	params := []byte{byte(addr), byte(addr >> 8)}
 	params = append(params, data...)
 
 	if err := h.writeInstruction(id, write, params...); err != nil {
@@ -173,8 +172,8 @@ func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
 }
 
 func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
-	params := make([]byte, 0, 2+len(data))
-	params = append(append(params, byte(addr), byte(addr>>8)), data...)
+	params := []byte{byte(addr), byte(addr >> 8)}
+	params = append(params, data...)
 
 	if err := h.writeInstruction(id, regWrite, params...); err != nil {
 		return fmt.Errorf("failed to send write instruction: %w", err)

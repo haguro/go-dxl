@@ -67,7 +67,7 @@ func TestRead(t *testing.T) {
 func TestWrite(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
 	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr := 4
+	addr := 2
 	data := []byte{0xF1, 0xF2}
 	if err := h.Write(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
@@ -82,7 +82,7 @@ func TestWrite(t *testing.T) {
 func TestRegWrite(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
 	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr := 4
+	addr := 3
 	data := []byte{0xF1, 0xF2}
 	if err := h.RegWrite(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
@@ -98,7 +98,7 @@ func TestRegWrite(t *testing.T) {
 func TestAction(t *testing.T) {
 	d := protocol.NewMockDevice(deviceConfig)
 	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr := 4
+	addr := 1
 	data := []byte{0xF1, 0xF2}
 	if err := h.RegWrite(byte(deviceConfig.ID), uint16(addr), data...); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
