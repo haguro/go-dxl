@@ -13,6 +13,12 @@ const (
 	LogReadWrite = LogRead | LogWrite
 )
 
+const (
+	ResetAll          byte = 0xFF // Reset everything in the device control table its default factory value
+	ResetExceptID     byte = 0x01 // Reset everything except the device ID
+	ResetExceptIDBaud byte = 0x02 // Reset everything except the device ID and the Baud Rate
+)
+
 const ClearMultiRotationPos byte = 0x01
 
 // Handler provides a high level API for interacting with Dynamixel devices
@@ -210,6 +216,24 @@ func (h *Handler) Action(id byte) error {
 
 func (h *Handler) Reboot(id byte) error {
 	if err := h.writeInstruction(id, reboot); err != nil {
+		return fmt.Errorf("failed to write instruction: %w", err)
+	}
+
+	if id != BroadcastID {
+		r, err := h.readStatus()
+		if err != nil {
+			return fmt.Errorf("failed to read/parse status: %w", err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
+		}
+	}
+
+	return nil
+}
+
+func (h *Handler) FactoryReset(id, option byte) error {
+	if err := h.writeInstruction(id, reset, option); err != nil {
 		return fmt.Errorf("failed to write instruction: %w", err)
 	}
 

@@ -25,6 +25,7 @@ type MockDevice struct {
 	regInstruction bool
 	timeout        time.Duration
 	delay          time.Duration
+	defaultConfig  MockDeviceConfig
 	//TODO more configuration to initialise some needed values and to control behaviour (e.g. simulate errors etc)
 }
 
@@ -34,12 +35,13 @@ func NewMockDevice(config MockDeviceConfig) *MockDevice {
 		config.InstructionTimeout = 3000 * time.Microsecond
 	}
 	d := MockDevice{
-		buf:     b,
-		id:      byte(config.ID),
-		model:   uint16(config.ModelNumber),
-		fw:      byte(config.FirmwareVer),
-		timeout: config.InstructionTimeout,
-		delay:   config.InternalDelay,
+		buf:           b,
+		id:            byte(config.ID),
+		model:         uint16(config.ModelNumber),
+		fw:            byte(config.FirmwareVer),
+		timeout:       config.InstructionTimeout,
+		delay:         config.InternalDelay,
+		defaultConfig: config,
 	}
 	d.ctRAM = make([]byte, len(config.ControlTableRAM))
 	copy(d.ctRAM, config.ControlTableRAM)
@@ -60,7 +62,7 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 	}
 	//TODO validate header, length, crc
 	id := p[4]
-	if id != d.id {
+	if id != d.id && id != BroadcastID {
 		return pLen, nil
 	}
 	instLength := uint16(p[5]) + uint16(p[6])<<8
@@ -113,23 +115,37 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 			d.ctRAM[i] = 0
 		}
 	case clear:
-		if instLength < 8 {
-			//TODO return processing error status when length is < 6 and larger than 5
-			return pLen, nil
-		}
 		//TODO verify fixed bytes and option
 		switch p[8] {
 		case ClearMultiRotationPos:
 			d.ctRAM[1], d.ctRAM[2], d.ctRAM[3] = d.ctRAM[1]&0x0F, 0, 0
 		}
-	case reset, backup, syncRead, syncWrite, fastSyncRead, bulkRead, bulkWrite, fastBRead:
+	case reset:
+		option := p[8]
+		if option == ResetAll && id == BroadcastID {
+			//Do nothing. See https://emanual.robotis.com/docs/en/dxl/protocol2/#description-5
+			return pLen, nil
+		}
+		for i := range d.ctRAM {
+			d.ctRAM[i] = d.defaultConfig.ControlTableRAM[i]
+		}
+		switch option {
+		case ResetAll:
+			d.id = byte(d.defaultConfig.ID)
+			d.model = uint16(d.defaultConfig.ModelNumber)
+			d.fw = byte(d.defaultConfig.FirmwareVer)
+		case ResetExceptID, ResetExceptIDBaud: //It's a mock device so BaudRate is irrelevant.
+			d.model = uint16(d.defaultConfig.ModelNumber)
+			d.fw = byte(d.defaultConfig.FirmwareVer)
+		}
+	case backup, syncRead, syncWrite, fastSyncRead, bulkRead, bulkWrite, fastBulkRead:
 		panic(fmt.Sprintf("TODO handle instruction %x", cmd))
 	default:
 		errByte = 0x02
 	}
 
 	length := 4 + uint16(len(params))
-
+	//TODO Decide whether to return a status packet based on instruction if id == BroadcastID
 	statusPacket := []byte{header1, header2, header3, headerR}
 	statusPacket = append(statusPacket, id, byte(length), byte(length>>8), statusCmd, errByte)
 	statusPacket = append(statusPacket, params...)
