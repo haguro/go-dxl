@@ -23,6 +23,7 @@ type MockDevice struct {
 	ctRAM          []byte
 	regWriteBuf    []byte
 	regInstruction bool
+	CTBackupReg    []byte
 	timeout        time.Duration
 	delay          time.Duration
 	defaultConfig  MockDeviceConfig
@@ -138,7 +139,18 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 			d.model = uint16(d.defaultConfig.ModelNumber)
 			d.fw = byte(d.defaultConfig.FirmwareVer)
 		}
-	case backup, syncRead, syncWrite, fastSyncRead, bulkRead, bulkWrite, fastBulkRead:
+	case backup:
+		option := p[8]
+		switch option {
+		case BackupStore:
+			if d.CTBackupReg == nil {
+				d.CTBackupReg = make([]byte, len(d.ctRAM))
+			}
+			copy(d.CTBackupReg, d.ctRAM)
+		case BackupRestore:
+			copy(d.ctRAM, d.CTBackupReg)
+		}
+	case syncRead, syncWrite, fastSyncRead, bulkRead, bulkWrite, fastBulkRead:
 		panic(fmt.Sprintf("TODO handle instruction %x", cmd))
 	default:
 		errByte = 0x02

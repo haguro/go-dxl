@@ -156,3 +156,22 @@ func TestFactoryReset(t *testing.T) {
 		t.Errorf("Expected %+v, got %+v", deviceConfig.ControlTableRAM, got)
 	}
 }
+
+func TestControlTableBackup(t *testing.T) {
+	d := protocol.NewMockDevice(deviceConfig)
+	h := protocol.NewHandler(d, protocol.NoLogging)
+	newCTVals := []byte{0xF1, 0xFA, 0x09, 0xA0}
+	if err := h.ControlTableBackup(byte(deviceConfig.ID), protocol.BackupStore); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+	if err := h.Write(byte(deviceConfig.ID), 0, newCTVals...); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+	if err := h.ControlTableBackup(byte(deviceConfig.ID), protocol.BackupRestore); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+	got := d.InspectControlTable(0, len(deviceConfig.ControlTableRAM))
+	if !reflect.DeepEqual(got, deviceConfig.ControlTableRAM) {
+		t.Errorf("Expected %+v, got %+v", deviceConfig.ControlTableRAM, got)
+	}
+}

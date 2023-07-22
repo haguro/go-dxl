@@ -21,6 +21,11 @@ const (
 
 const ClearMultiRotationPos byte = 0x01
 
+const (
+	BackupStore   byte = 0x01
+	BackupRestore byte = 0x02
+)
+
 // Handler provides a high level API for interacting with Dynamixel devices
 // over a communication interface. It handles constructing protocol packets,
 // sending instructions, and parsing status responses.
@@ -252,6 +257,24 @@ func (h *Handler) FactoryReset(id, option byte) error {
 
 func (h *Handler) Clear(id, option byte) error {
 	if err := h.writeInstruction(id, clear, option, 0x44, 0x58, 0x4C, 0x22); err != nil {
+		return fmt.Errorf("failed to write instruction: %w", err)
+	}
+
+	if id != BroadcastID {
+		r, err := h.readStatus()
+		if err != nil {
+			return fmt.Errorf("failed to read/parse status: %w", err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
+		}
+	}
+
+	return nil
+}
+
+func (h *Handler) ControlTableBackup(id byte, option byte) error {
+	if err := h.writeInstruction(id, backup, option, 0x43, 0x54, 0x52, 0x4C); err != nil {
 		return fmt.Errorf("failed to write instruction: %w", err)
 	}
 
