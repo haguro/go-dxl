@@ -291,6 +291,47 @@ func (h *Handler) ControlTableBackup(id byte, option byte) error {
 	return nil
 }
 
+func (h *Handler) SyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
+	params := []byte{byte(addr), byte(addr >> 8), byte(length), byte(length >> 8)}
+	params = append(params, ids...)
+
+	if err := h.writeInstruction(BroadcastID, syncRead, params...); err != nil {
+		return nil, fmt.Errorf("failed to send sync read instruction: %w", err)
+	}
+
+	var responses [][]byte
+	for range ids {
+		r, err := h.readStatus()
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse sync read status: %w", err)
+		}
+		if r.err != nil {
+			return nil, r.err
+		}
+		if len(r.params) != int(length) {
+			return nil, errUnexpectedParamCount
+		}
+		responses = append(responses, r.params)
+	}
+
+	return responses, nil
+}
+
+func (h *Handler) SyncWrite(addr, length uint16, data ...byte) error {
+	params := []byte{byte(addr), byte(addr >> 8), byte(length), byte(length >> 8)}
+	params = append(params, data...)
+
+	if err := h.writeInstruction(BroadcastID, syncWrite, params...); err != nil {
+		return fmt.Errorf("failed to send write instruction: %w", err)
+	}
+
+	return nil
+}
+
+
+// TODO FastSyncRead
+// TODO FastBulkRead
+
 func logPacket(packet []byte) {
 	n := len(packet)
 	inHex := "["

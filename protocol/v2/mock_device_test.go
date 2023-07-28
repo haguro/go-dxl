@@ -102,11 +102,12 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 	}
 	//TODO validate header, length, crc
 	id := p[4]
-	if id != d.id && id != BroadcastID {
+	if id != BroadcastID && id != d.id {
 		return pLen, nil
 	}
 	instLength := uint16(p[5]) + uint16(p[6])<<8
 	cmd := p[7]
+	instParams := p[8 : 8+instLength-3]
 
 	errByte := byte(0)
 	var params []byte //Assign default value once all instructions (commands) are implemented
@@ -118,25 +119,25 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		if instLength != 7 {
 			return pLen, nil
 		}
-		addr, l := uint16(p[8])+uint16(p[9])<<8, uint16(p[10])+uint16(p[11])<<8
+		addr, l := uint16(instParams[0])+uint16(instParams[1])<<8, uint16(instParams[2])+uint16(instParams[3])<<8
 		params = d.ctRAM[addr : addr+l]
 	case write:
 		if instLength < 6 {
 			//TODO return processing error when length is < 6 and larger than 5
 			return pLen, nil
 		}
-		addr := int(p[8]) + int(p[9])<<8
+		addr := int(instParams[0]) + int(instParams[1])<<8
 		for i := 0; i < int(instLength)-5; i++ {
-			d.ctRAM[addr+i] = p[10+i]
+			d.ctRAM[addr+i] = instParams[2+i]
 		}
 	case regWrite:
 		if instLength < 6 {
 			//TODO return processing error status when length is < 6 and larger than 5
 			return pLen, nil
 		}
-		d.regWriteBuf = []byte{p[8], p[9]}
+		d.regWriteBuf = []byte{instParams[0], instParams[1]}
 		for i := 0; i < int(instLength)-5; i++ {
-			d.regWriteBuf = append(d.regWriteBuf, p[10+i])
+			d.regWriteBuf = append(d.regWriteBuf, instParams[2+i])
 		}
 		d.regInstruction = true
 	case action:
@@ -156,12 +157,12 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		}
 	case clear:
 		//TODO verify fixed bytes and option
-		switch p[8] {
+		switch instParams[0] {
 		case ClearMultiRotationPos:
 			d.ctRAM[1], d.ctRAM[2], d.ctRAM[3] = d.ctRAM[1]&0x0F, 0, 0
 		}
 	case reset:
-		option := p[8]
+		option := instParams[0]
 		if option == ResetAll && id == BroadcastID {
 			//Do nothing. See https://emanual.robotis.com/docs/en/dxl/protocol2/#description-5
 			return pLen, nil
@@ -179,7 +180,7 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 			d.fw = byte(d.defaultConfig.FirmwareVer)
 		}
 	case backup:
-		option := p[8]
+		option := instParams[0]
 		switch option {
 		case BackupStore:
 			if d.CTBackupReg == nil {
@@ -189,22 +190,53 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		case BackupRestore:
 			copy(d.ctRAM, d.CTBackupReg)
 		}
-	case syncRead, syncWrite, fastSyncRead, bulkRead, bulkWrite, fastBulkRead:
-		panic(fmt.Sprintf("TODO handle instruction %x", cmd))
+	case syncRead:
+		addr, l := int(instParams[0])+int(instParams[1])<<8, int(instParams[2])+int(instParams[3])<<8
+		ids := instParams[4:]
+		var idIncluded bool
+		for _, devId := range ids {
+			if devId == d.id {
+				idIncluded = true
+				break
+			}
+		}
+		if !idIncluded {
+			return pLen, nil
+		}
+		params = d.ctRAM[addr : addr+l]
+	case syncWrite:
+		addr, l := int(instParams[0])+int(instParams[1])<<8, int(instParams[2])+int(instParams[3])<<8
+		var data []byte
+		dataToWrite := instParams[4:]
+		for i := 0; i < len(dataToWrite); i += l + 1 {
+			if dataToWrite[i] == d.id {
+				for j := 0; j < l; j++ {
+					data = append(data, dataToWrite[i+j+1])
+				}
+			}
+		}
+		for i, v := range data {
+			d.ctRAM[addr+i] = v
+		}
+	case bulkRead, bulkWrite, fastSyncRead, fastBulkRead:
+		panic(fmt.Sprintf("Instruction %x is not implemented", cmd))
 	default:
 		errByte = 0x02
 	}
 
-	length := 4 + uint16(len(params))
-	//TODO Decide whether to return a status packet based on instruction if id == BroadcastID
-	statusPacket := []byte{header1, header2, header3, headerR}
-	statusPacket = append(statusPacket, id, byte(length), byte(length>>8), statusCmd, errByte)
-	statusPacket = append(statusPacket, params...)
-	statusPacket = append(statusPacket, 0, 0)
-	updatePacketCRCBytes(statusPacket)
-
 	time.Sleep(d.delay)
-	d.buf.Write(statusPacket)
+
+	//TODO Support return level values
+	if id != BroadcastID || cmd == ping || cmd == syncRead || cmd == bulkRead {
+		length := 4 + uint16(len(params))
+		statusPacket := []byte{header1, header2, header3, headerR}
+		statusPacket = append(statusPacket, id, byte(length), byte(length>>8), statusCmd, errByte)
+		statusPacket = append(statusPacket, params...)
+		statusPacket = append(statusPacket, 0, 0)
+		updatePacketCRCBytes(statusPacket)
+
+		d.buf.Write(statusPacket)
+	}
 
 	return pLen, nil
 }
