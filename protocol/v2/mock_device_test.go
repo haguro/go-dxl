@@ -2,9 +2,48 @@ package protocol
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"time"
 )
+
+type DeviceChain struct {
+	devices []*MockDevice
+	buf     *bytes.Buffer
+}
+
+func NewDeviceChain(devices ...*MockDevice) *DeviceChain {
+	return &DeviceChain{
+		devices: devices,
+		buf:     &bytes.Buffer{},
+	}
+}
+
+func (c *DeviceChain) Read(p []byte) (int, error) {
+	for _, d := range c.devices {
+		_, err := io.Copy(c.buf, d)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				continue
+			}
+			return 0, fmt.Errorf("failed to read from device chain: %w", err)
+		}
+	}
+	return c.buf.Read(p)
+}
+
+func (c *DeviceChain) Write(p []byte) (int, error) {
+	var t int
+	for _, d := range c.devices {
+		n, err := d.Write(p)
+		if err != nil {
+			return 0, fmt.Errorf("failed to write to device chain: %w", err)
+		}
+		t += n
+	}
+	return t, nil
+}
 
 type MockDeviceConfig struct {
 	ID                 int
@@ -16,7 +55,7 @@ type MockDeviceConfig struct {
 }
 
 type MockDevice struct {
-	buf            bytes.Buffer
+	buf            *bytes.Buffer
 	id             byte
 	model          uint16
 	fw             byte
@@ -36,7 +75,7 @@ func NewMockDevice(config MockDeviceConfig) *MockDevice {
 		config.InstructionTimeout = 3000 * time.Microsecond
 	}
 	d := MockDevice{
-		buf:           b,
+		buf:           &b,
 		id:            byte(config.ID),
 		model:         uint16(config.ModelNumber),
 		fw:            byte(config.FirmwareVer),
