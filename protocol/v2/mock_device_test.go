@@ -218,7 +218,33 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		for i, v := range data {
 			d.ctRAM[addr+i] = v
 		}
-	case bulkRead, bulkWrite, fastSyncRead, fastBulkRead:
+	case bulkRead:
+		if instLength < 8 {
+			//No data at all which means no IDs. So will never be matched by any device.
+			return pLen, nil
+		}
+		for i := 0; i < len(instParams); i += 5 {
+			if instParams[i] == d.id {
+				addr, l := int(instParams[i+1])+int(instParams[i+2])<<8, int(instParams[i+3])+int(instParams[i+4])<<8
+				params = d.ctRAM[addr : addr+l]
+				fmt.Println(params)
+			}
+		}
+	case bulkWrite:
+		if instLength < 8 {
+			//No data at all which means no IDs. So will never be matched by any device.
+			return pLen, nil
+		}
+		for i := 0; i < len(instParams); {
+			addr, l := int(instParams[i+1])+int(instParams[i+2])<<8, int(instParams[i+3])+int(instParams[i+4])<<8
+			if instParams[i] == d.id {
+				for j := 0; j < l; j++ {
+					d.ctRAM[addr+j] = instParams[5+i+j]
+				}
+			}
+			i += 5 + l
+		}
+	case fastSyncRead, fastBulkRead:
 		panic(fmt.Sprintf("Instruction %x is not implemented", cmd))
 	default:
 		errByte = 0x02

@@ -40,6 +40,20 @@ type PingResponse struct {
 	Firmware byte
 }
 
+// BulkRDescriptor describes the information required to bulk-read data
+type BulkReadDescriptor struct {
+	ID     byte
+	Addr   uint16
+	Length uint16
+}
+
+// BulkWDescriptor describes the information required to bulk-write data
+type BulkWriteDescriptor struct {
+	ID   byte
+	Addr uint16
+	Data []byte
+}
+
 func NewHandler(rw io.ReadWriter, logPacketOpts byte) *Handler {
 	return &Handler{
 		rw:      rw,
@@ -328,6 +342,51 @@ func (h *Handler) SyncWrite(addr, length uint16, data ...byte) error {
 	return nil
 }
 
+func (h *Handler) BulkRead(data []BulkReadDescriptor) ([][]byte, error) {
+	params := []byte{}
+	for _, dd := range data {
+		params = append(params,
+			dd.ID, byte(dd.Addr), byte(dd.Addr>>8),
+			byte(dd.Length), byte(dd.Length>>8))
+	}
+
+	if err := h.writeInstruction(BroadcastID, bulkRead, params...); err != nil {
+		return nil, fmt.Errorf("failed to send bulk read instruction: %w", err)
+	}
+
+	var responses [][]byte
+	for _, dd := range data {
+		r, err := h.readStatus()
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse bulk read status: %w", err)
+		}
+		if r.err != nil {
+			return nil, r.err
+		}
+		if len(r.params) != int(dd.Length) {
+			return nil, errUnexpectedParamCount
+		}
+		responses = append(responses, r.params)
+	}
+	return responses, nil
+}
+
+func (h *Handler) BulkWrite(data []BulkWriteDescriptor) error {
+	params := []byte{}
+	for _, dd := range data {
+		length := len(dd.Data)
+		params = append(params, dd.ID)
+		params = append(params, byte(dd.Addr), byte(dd.Addr>>8))
+		params = append(params, byte(length), byte(length>>8))
+		params = append(params, dd.Data...)
+	}
+
+	if err := h.writeInstruction(BroadcastID, bulkWrite, params...); err != nil {
+		return fmt.Errorf("failed to send write instruction: %w", err)
+	}
+
+	return nil
+}
 
 // TODO FastSyncRead
 // TODO FastBulkRead

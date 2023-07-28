@@ -252,10 +252,101 @@ func TestSyncWrite(t *testing.T) {
 	}
 }
 
+func TestBulkRead(t *testing.T) {
+	d1 := protocol.NewMockDevice(device1Config)
+	d2 := protocol.NewMockDevice(device2Config)
+	d3 := protocol.NewMockDevice(device3Config)
+	c := protocol.NewDeviceChain(d1, d2, d3)
+	h := protocol.NewHandler(c, protocol.NoLogging)
+
+	brDesc := []protocol.BulkReadDescriptor{
+		{
+			ID:     byte(device1Config.ID),
+			Addr:   1,
+			Length: 3,
+		},
+		{
+			ID:     byte(device2Config.ID),
+			Addr:   4,
+			Length: 2,
+		},
+		{
+			ID:     byte(device3Config.ID),
+			Addr:   2,
+			Length: 3,
+		},
+	}
+	data, err := h.BulkRead(brDesc)
+	if err != nil {
 		t.Fatalf("Expected no error, got %q", err)
 	}
-	got := d.InspectControlTable(0, len(deviceConfig.ControlTableRAM))
-	if !reflect.DeepEqual(got, deviceConfig.ControlTableRAM) {
-		t.Errorf("Expected %+v, got %+v", deviceConfig.ControlTableRAM, got)
+
+	if len(data) != len(brDesc) {
+		t.Fatalf("Expected all %d devices to return status, only %d did", len(brDesc), len(data))
+	}
+
+	got1 := data[0]
+	want1 := device1Config.ControlTableRAM[brDesc[0].Addr : brDesc[0].Addr+brDesc[0].Length]
+	if !reflect.DeepEqual(got1, want1) {
+		t.Errorf("Expected %+v to be read from Device 1, got %+v", want1, got1)
+	}
+
+	got2 := data[1]
+	want2 := device2Config.ControlTableRAM[brDesc[1].Addr : brDesc[1].Addr+brDesc[1].Length]
+	if !reflect.DeepEqual(got2, want2) {
+		t.Errorf("Expected %+v to be read from Device 2, got %+v", want2, got2)
+	}
+
+	got3 := data[2]
+	want3 := device3Config.ControlTableRAM[brDesc[2].Addr : brDesc[2].Addr+brDesc[2].Length]
+	if !reflect.DeepEqual(got3, want3) {
+		t.Errorf("Expected %+v to be read from Device 3, got %+v", want3, got3)
+	}
+}
+
+func TestBulkWrite(t *testing.T) {
+	d1 := protocol.NewMockDevice(device1Config)
+	d2 := protocol.NewMockDevice(device2Config)
+	d3 := protocol.NewMockDevice(device3Config)
+	c := protocol.NewDeviceChain(d1, d2, d3)
+	h := protocol.NewHandler(c, protocol.NoLogging)
+
+	bwDesc := []protocol.BulkWriteDescriptor{
+		{
+			ID:   byte(device1Config.ID),
+			Addr: 2,
+			Data: []byte{0x01, 0x02, 0x03},
+		},
+		{
+			ID:   byte(device2Config.ID),
+			Addr: 4,
+			Data: []byte{0x04, 0x05},
+		},
+		{
+			ID:   byte(device3Config.ID),
+			Addr: 5,
+			Data: []byte{0x06},
+		},
+	}
+	if err := h.BulkWrite(bwDesc); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
+	}
+
+	got1 := d1.InspectControlTable(int(bwDesc[0].Addr), len(bwDesc[0].Data))
+	want1 := bwDesc[0].Data
+	if !reflect.DeepEqual(got1, want1) {
+		t.Errorf("Expected %+v to be written to Device 1, got %+v", want1, got1)
+	}
+
+	got2 := d2.InspectControlTable(int(bwDesc[1].Addr), len(bwDesc[1].Data))
+	want2 := bwDesc[1].Data
+	if !reflect.DeepEqual(got2, want2) {
+		t.Errorf("Expected %+v to be written to Device 2, got %+v", want2, got2)
+	}
+
+	got3 := d3.InspectControlTable(int(bwDesc[2].Addr), len(bwDesc[2].Data))
+	want3 := bwDesc[2].Data
+	if !reflect.DeepEqual(got3, want3) {
+		t.Errorf("Expected %+v to be written to Device 3, got %+v", want3, got3)
 	}
 }
