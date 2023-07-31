@@ -89,11 +89,11 @@ func (h *Handler) readStatus() (status, error) {
 		return status{}, fmt.Errorf("failed to read status packet: %w", err)
 	}
 	if n < 7 { //Note this won't be needed once wait/timeout is implemented.
-		return status{}, errTruncatedStatus
+		return status{}, ErrTruncatedStatus
 	}
 	//TODO header pattern scanner? It would theoretically render the initial Flush call useless!
 	if packet[0] != 0xFF || packet[1] != 0xFF || packet[2] != 0xFD || packet[3] != 0x00 {
-		return status{}, errMalformedStatus
+		return status{}, ErrMalformedStatus
 	}
 
 	length := uint16(packet[5]) + uint16(packet[6])<<8
@@ -102,7 +102,7 @@ func (h *Handler) readStatus() (status, error) {
 	// and crc(high)).
 	// We have to check this again when parsing the packet but we need to stop early if it where to happen.
 	if length < 4 {
-		return status{}, errInvalidStatusLength
+		return status{}, ErrInvalidStatusLength
 	}
 
 	instErrParamsCRC := make([]byte, length) // instruction, error, params and crc bytes
@@ -111,7 +111,7 @@ func (h *Handler) readStatus() (status, error) {
 		return status{}, fmt.Errorf("failed to read status packet: %w", err)
 	}
 	if n < int(length) {
-		return status{}, errTruncatedStatus
+		return status{}, ErrTruncatedStatus
 	}
 
 	packet = append(packet, instErrParamsCRC...)
@@ -143,7 +143,7 @@ func (h *Handler) Ping(id byte) (PingResponse, error) {
 	}
 
 	if len(r.params) != 3 {
-		return PingResponse{}, errUnexpectedParamCount
+		return PingResponse{}, ErrUnexpectedParamCount
 	}
 
 	return PingResponse{
@@ -155,7 +155,7 @@ func (h *Handler) Ping(id byte) (PingResponse, error) {
 
 func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 	if id == BroadcastID {
-		return nil, errNoStatusOnBroadcast
+		return nil, ErrNoStatusOnBroadcast
 	}
 	if err := h.writeInstruction(id, read, byte(addr), byte(addr>>8), byte(length), byte(length>>8)); err != nil {
 		return nil, fmt.Errorf("failed to send read instruction: %w", err)
@@ -171,7 +171,7 @@ func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 	}
 
 	if len(r.params) != int(length) {
-		return nil, errUnexpectedParamCount
+		return nil, ErrUnexpectedParamCount
 	}
 
 	return r.params, nil
@@ -323,7 +323,7 @@ func (h *Handler) SyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
 			return nil, r.err
 		}
 		if len(r.params) != int(length) {
-			return nil, errUnexpectedParamCount
+			return nil, ErrUnexpectedParamCount
 		}
 		responses = append(responses, r.params)
 	}
@@ -364,7 +364,7 @@ func (h *Handler) BulkRead(data []BulkReadDescriptor) ([][]byte, error) {
 			return nil, r.err
 		}
 		if len(r.params) != int(dd.Length) {
-			return nil, errUnexpectedParamCount
+			return nil, ErrUnexpectedParamCount
 		}
 		responses = append(responses, r.params)
 	}

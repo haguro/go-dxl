@@ -17,7 +17,7 @@ func TestInstructionPacketBytes(t *testing.T) {
 			name: "Invalid ID",
 			inst: &instruction{id: 0xFF,
 				command: ping},
-			expErr: errInvalidID,
+			expErr: ErrInvalidID,
 		},
 		{
 			name: "Valid instruction with no params",
@@ -100,62 +100,62 @@ func TestParseStatusPacket(t *testing.T) {
 		{
 			name:        "Valid Response with Device Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x80, 0xA2, 0x8F},
-			expStatus:   status{id: 0x01, err: errDeviceError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrDeviceError, params: []byte{}},
 		},
 		{
 			name:        "Valid Response with Result Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x01, 0xA4, 0x8C},
-			expStatus:   status{id: 0x01, err: errResultError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrResultError, params: []byte{}},
 		},
 		{
 			name:        "Valid Response with Instruction Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x02, 0xAE, 0x8C},
-			expStatus:   status{id: 0x01, err: errInstructionError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrInstructionError, params: []byte{}},
 		},
 		{
 			name:        "Valid Response with CRC Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x03, 0xAB, 0x0C},
-			expStatus:   status{id: 0x01, err: errDeviceCRCError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrDeviceCRCError, params: []byte{}},
 		},
 		{
 			name:        "Valid Response with Device Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x04, 0xBA, 0x8C},
-			expStatus:   status{id: 0x01, err: errDataRangeError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrDataRangeError, params: []byte{}},
 		},
 		{
 			name:        "Valid Response with Data Length Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x05, 0xBF, 0x0C},
-			expStatus:   status{id: 0x01, err: errDataLengthError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrDataLengthError, params: []byte{}},
 		},
 		{
 			name:        "Valid Response with Data Limit Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x06, 0xB5, 0x0C},
-			expStatus:   status{id: 0x01, err: errDataLimitError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrDataLimitError, params: []byte{}},
 		},
 		{
 			name:        "Valid Response with Access Error",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x04, 0x00, 0x55, 0x07, 0xB0, 0x8C},
-			expStatus:   status{id: 0x01, err: errAccessError, params: []byte{}},
+			expStatus:   status{id: 0x01, err: ErrAccessError, params: []byte{}},
 		},
 		{
 			name:        "Packet Too Short",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0xFF, 0x01, 0x00, 0x55, 0x00},
-			expErr:      errTruncatedStatus,
+			expErr:      ErrTruncatedStatus,
 		},
 		{
 			name:        "Packet with Incorrect Instruction",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x05, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D},
-			expErr:      errMalformedStatus,
+			expErr:      ErrMalformedStatus,
 		},
 		{
 			name:        "Packet with Incorrect Length Value",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x08, 0x01, 0x55, 0x00, 0x06, 0x04, 0x26, 0x65, 0x5D},
-			expErr:      errInvalidStatusLength,
+			expErr:      ErrInvalidStatusLength,
 		},
 		{
 			name:        "Packet with Invalid CRC bytes",
 			packetBytes: []byte{0xFF, 0xFF, 0xFD, 0x00, 0x01, 0x07, 0x00, 0x55, 0x00, 0x06, 0x04, 0x26, 0xA4, 0x8F},
-			expErr:      errStatusCRCInvalid,
+			expErr:      ErrStatusCRCInvalid,
 		},
 	}
 	for _, tc := range testCases {

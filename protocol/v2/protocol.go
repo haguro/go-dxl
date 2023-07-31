@@ -48,7 +48,7 @@ type status struct {
 
 func (inst *instruction) packetBytes() ([]byte, error) {
 	if inst.id > BroadcastID {
-		return nil, errInvalidID
+		return nil, ErrInvalidID
 	}
 
 	length := 3 + len(inst.params)
@@ -74,21 +74,21 @@ func (inst *instruction) packetBytes() ([]byte, error) {
 func parseStatusPacket(packet []byte) (status, error) {
 	l := len(packet)
 	if l < minStatusLen {
-		return status{}, errTruncatedStatus
+		return status{}, ErrTruncatedStatus
 	}
 
 	if packet[7] != statusCmd {
-		return status{}, errMalformedStatus
+		return status{}, ErrMalformedStatus
 	}
 
 	length := uint16(packet[5]) + uint16(packet[6])<<8
 	if length < minStatusLengthVal || length > uint16(l-7) {
-		return status{}, errInvalidStatusLength
+		return status{}, ErrInvalidStatusLength
 	}
 
 	crc := packetCRC(packet[:l-2])
 	if packet[length+5] != byte(crc) || packet[length+6] != byte(crc>>8) {
-		return status{}, errStatusCRCInvalid
+		return status{}, ErrStatusCRCInvalid
 	}
 
 	params := make([]byte, length-minStatusLengthVal)
@@ -105,23 +105,23 @@ func parseStatusPacket(packet []byte) (status, error) {
 
 func parseProcessingErr(errByte byte) error {
 	if (errByte >> 7) == 1 {
-		return errDeviceError
+		return ErrDeviceError
 	}
 	switch errByte {
 	case 1:
-		return errResultError
+		return ErrResultError
 	case 2:
-		return errInstructionError
+		return ErrInstructionError
 	case 3:
-		return errDeviceCRCError
+		return ErrDeviceCRCError
 	case 4:
-		return errDataRangeError
+		return ErrDataRangeError
 	case 5:
-		return errDataLengthError
+		return ErrDataLengthError
 	case 6:
-		return errDataLimitError
+		return ErrDataLimitError
 	case 7:
-		return errAccessError
+		return ErrAccessError
 	}
 	return nil
 }
