@@ -66,7 +66,7 @@ func (h *Handler) writeInstruction(id, command byte, params ...byte) error {
 	inst := &instruction{id, command, params}
 	packet, err := inst.packetBytes()
 	if err != nil {
-		return fmt.Errorf("failed to write instruction packet bytes: %w", err)
+		return fmt.Errorf("failed to create instruction packet: %w", err)
 	}
 	if h.logOpts&LogWrite != 0 {
 		logPacket(packet)
@@ -100,7 +100,7 @@ func (h *Handler) readStatus() (status, error) {
 
 	// It should be impossible for the length value to be less than 4 bytes (instruction, error, crc(low)
 	// and crc(high)).
-	// We have to check this again when parsing the packet but we need to stop early if it should happen.
+	// We have to check this again when parsing the packet but we need to stop early if it where to happen.
 	if length < 4 {
 		return status{}, errInvalidStatusLength
 	}
@@ -158,12 +158,12 @@ func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 		return nil, errNoStatusOnBroadcast
 	}
 	if err := h.writeInstruction(id, read, byte(addr), byte(addr>>8), byte(length), byte(length>>8)); err != nil {
-		return nil, fmt.Errorf("failed to send ping instruction: %w", err)
+		return nil, fmt.Errorf("failed to send read instruction: %w", err)
 	}
 
 	r, err := h.readStatus()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse ping status: %w", err)
+		return nil, fmt.Errorf("failed to read/parse read status: %w", err)
 	}
 
 	if r.err != nil {
@@ -187,7 +187,7 @@ func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
-			return fmt.Errorf("failed to parse write status: %w", err)
+			return fmt.Errorf("failed to read/parse write status: %w", err)
 		}
 		if r.err != nil {
 			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
@@ -201,12 +201,12 @@ func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
 	params = append(params, data...)
 
 	if err := h.writeInstruction(id, regWrite, params...); err != nil {
-		return fmt.Errorf("failed to send write instruction: %w", err)
+		return fmt.Errorf("failed to send reg write instruction: %w", err)
 	}
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
-			return fmt.Errorf("failed to parse write status: %w", err)
+			return fmt.Errorf("failed to read/parse reg write status: %w", err)
 		}
 		if r.err != nil {
 			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
@@ -217,13 +217,13 @@ func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
 
 func (h *Handler) Action(id byte) error {
 	if err := h.writeInstruction(id, action); err != nil {
-		return fmt.Errorf("failed to write instruction: %w", err)
+		return fmt.Errorf("failed to send action instruction: %w", err)
 	}
 
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
-			return fmt.Errorf("failed to read/parse status: %w", err)
+			return fmt.Errorf("failed to read/parse action status: %w", err)
 		}
 		if r.err != nil {
 			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
@@ -235,13 +235,13 @@ func (h *Handler) Action(id byte) error {
 
 func (h *Handler) Reboot(id byte) error {
 	if err := h.writeInstruction(id, reboot); err != nil {
-		return fmt.Errorf("failed to write instruction: %w", err)
+		return fmt.Errorf("failed to send reboot instruction: %w", err)
 	}
 
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
-			return fmt.Errorf("failed to read/parse status: %w", err)
+			return fmt.Errorf("failed to read/parse reboot status: %w", err)
 		}
 		if r.err != nil {
 			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
@@ -253,13 +253,13 @@ func (h *Handler) Reboot(id byte) error {
 
 func (h *Handler) FactoryReset(id, option byte) error {
 	if err := h.writeInstruction(id, reset, option); err != nil {
-		return fmt.Errorf("failed to write instruction: %w", err)
+		return fmt.Errorf("failed to send reset instruction: %w", err)
 	}
 
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
-			return fmt.Errorf("failed to read/parse status: %w", err)
+			return fmt.Errorf("failed to read/parse reset status: %w", err)
 		}
 		if r.err != nil {
 			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
@@ -271,13 +271,13 @@ func (h *Handler) FactoryReset(id, option byte) error {
 
 func (h *Handler) Clear(id, option byte) error {
 	if err := h.writeInstruction(id, clear, option, 0x44, 0x58, 0x4C, 0x22); err != nil {
-		return fmt.Errorf("failed to write instruction: %w", err)
+		return fmt.Errorf("failed to send clear instruction: %w", err)
 	}
 
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
-			return fmt.Errorf("failed to read/parse status: %w", err)
+			return fmt.Errorf("failed to read/parse clear status: %w", err)
 		}
 		if r.err != nil {
 			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
@@ -289,13 +289,13 @@ func (h *Handler) Clear(id, option byte) error {
 
 func (h *Handler) ControlTableBackup(id byte, option byte) error {
 	if err := h.writeInstruction(id, backup, option, 0x43, 0x54, 0x52, 0x4C); err != nil {
-		return fmt.Errorf("failed to write instruction: %w", err)
+		return fmt.Errorf("failed to send backup instruction: %w", err)
 	}
 
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
-			return fmt.Errorf("failed to read/parse status: %w", err)
+			return fmt.Errorf("failed to read/parse backup status: %w", err)
 		}
 		if r.err != nil {
 			return fmt.Errorf("device ID %d returned error: %w", id, r.err)
@@ -317,7 +317,7 @@ func (h *Handler) SyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
 	for range ids {
 		r, err := h.readStatus()
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse sync read status: %w", err)
+			return nil, fmt.Errorf("failed to read/parse sync read status: %w", err)
 		}
 		if r.err != nil {
 			return nil, r.err
@@ -336,7 +336,7 @@ func (h *Handler) SyncWrite(addr, length uint16, data ...byte) error {
 	params = append(params, data...)
 
 	if err := h.writeInstruction(BroadcastID, syncWrite, params...); err != nil {
-		return fmt.Errorf("failed to send write instruction: %w", err)
+		return fmt.Errorf("failed to send sync write instruction: %w", err)
 	}
 
 	return nil
@@ -358,7 +358,7 @@ func (h *Handler) BulkRead(data []BulkReadDescriptor) ([][]byte, error) {
 	for _, dd := range data {
 		r, err := h.readStatus()
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse bulk read status: %w", err)
+			return nil, fmt.Errorf("failed to read/parse bulk read status: %w", err)
 		}
 		if r.err != nil {
 			return nil, r.err
@@ -382,7 +382,7 @@ func (h *Handler) BulkWrite(data []BulkWriteDescriptor) error {
 	}
 
 	if err := h.writeInstruction(BroadcastID, bulkWrite, params...); err != nil {
-		return fmt.Errorf("failed to send write instruction: %w", err)
+		return fmt.Errorf("failed to send bulk write instruction: %w", err)
 	}
 
 	return nil
