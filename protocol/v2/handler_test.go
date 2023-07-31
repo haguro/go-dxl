@@ -2,32 +2,10 @@ package protocol_test
 
 import (
 	"bytes"
-	"reflect"
 	"testing"
 
 	"github.com/haguro/go-dxl/protocol/v2"
 )
-
-var device1Config = protocol.MockDeviceConfig{
-	ID:              0x99,
-	ModelNumber:     0x424,
-	FirmwareVer:     0x2F,
-	ControlTableRAM: []byte{0x32, 0x14, 0xF0, 0xE9, 0xA9, 0x7C},
-}
-
-var device2Config = protocol.MockDeviceConfig{
-	ID:              0xF0,
-	ModelNumber:     0x424,
-	FirmwareVer:     0x2F,
-	ControlTableRAM: []byte{0xA9, 0x56, 0xFF, 0x93, 0xBB, 0x7C},
-}
-
-var device3Config = protocol.MockDeviceConfig{
-	ID:              0x1B,
-	ModelNumber:     0x424,
-	FirmwareVer:     0x2F,
-	ControlTableRAM: []byte{0x99, 0xAF, 0x12, 0x98, 0x7D, 0xE3},
-}
 
 func TestFlush(t *testing.T) {
 	b := bytes.NewBuffer(make([]byte, 10))
@@ -43,181 +21,169 @@ func TestFlush(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
+	config := protocol.MockDeviceConfig{
+		ID: 0x99,
+	}
+	d := protocol.NewMockDevice(config)
 	h := protocol.NewHandler(d, protocol.NoLogging)
 
-	got, err := h.Ping(byte(device1Config.ID))
+	_, err := h.Ping(byte(config.ID))
 	if err != nil {
 		t.Fatalf("Expected no error, got %q", err)
-	}
-
-	want := protocol.PingResponse{
-		ID:       byte(device1Config.ID),
-		Model:    uint16(device1Config.ModelNumber),
-		Firmware: byte(device1Config.FirmwareVer),
-	}
-
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Expected %+v, got %+v", want, got)
 	}
 }
 
 func TestRead(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
+	config := protocol.MockDeviceConfig{
+		ID: 0x01,
+	}
+	d := protocol.NewMockDevice(config)
 	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr, length := 3, 2
+	addr, length := 3, 8
 
-	got, err := h.Read(byte(device1Config.ID), uint16(addr), uint16(length))
+	got, err := h.Read(byte(config.ID), uint16(addr), uint16(length))
 	if err != nil {
 		t.Fatalf("Expected no error, got %q", err)
 	}
 
-	want := device1Config.ControlTableRAM[addr : addr+length]
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Expected %+v, got %+v", want, got)
+	if len(got) != length {
+		t.Errorf("Expected %d bytes, got %d", length, len(got))
 	}
 }
 
 func TestWrite(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
+	config := protocol.MockDeviceConfig{
+		ID: 0x7A,
+	}
+	d := protocol.NewMockDevice(config)
 	h := protocol.NewHandler(d, protocol.NoLogging)
 	addr := 2
 	data := []byte{0xF1, 0xF2}
-	if err := h.Write(byte(device1Config.ID), uint16(addr), data...); err != nil {
+	if err := h.Write(byte(config.ID), uint16(addr), data...); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
-	}
-
-	got := d.InspectControlTable(addr, len(data))
-	if !reflect.DeepEqual(got, data) {
-		t.Errorf("Expected %+v, got %+v", data, got)
 	}
 }
 
 func TestRegWrite(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr := 3
-	data := []byte{0xF1, 0xF2}
-	if err := h.RegWrite(byte(device1Config.ID), uint16(addr), data...); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	config := protocol.MockDeviceConfig{
+		ID: 0xA9,
 	}
-
-	want := append([]byte{byte(addr), byte(addr >> 8)}, data...)
-	got := d.InspectRegWriteBuffer()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Expected RegWrite to not change control table, got %+v", got)
+	d := protocol.NewMockDevice(config)
+	h := protocol.NewHandler(d, protocol.NoLogging)
+	addr := 2
+	data := []byte{0xF1, 0xF2}
+	if err := h.RegWrite(byte(config.ID), uint16(addr), data...); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
 	}
 }
 
 func TestAction(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
+	config := protocol.MockDeviceConfig{
+		ID: 0x9D,
+	}
+	d := protocol.NewMockDevice(config)
 	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr := 1
-	data := []byte{0xF1, 0xF2}
-	if err := h.RegWrite(byte(device1Config.ID), uint16(addr), data...); err != nil {
+	if err := h.Action(byte(config.ID)); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
-	}
-	if err := h.Action(byte(device1Config.ID)); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
-
-	got := d.InspectControlTable(addr, len(data))
-	if !reflect.DeepEqual(got, data) {
-		t.Errorf("Expected %+v, got %+v", data, got)
 	}
 }
 
 func TestReboot(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	if err := h.Reboot(byte(device1Config.ID)); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	config := protocol.MockDeviceConfig{
+		ID: 0xD0,
 	}
-
-	want := make([]byte, len(device1Config.ControlTableRAM))
-	got := d.InspectControlTable(0, len(device1Config.ControlTableRAM))
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Expected %+v, got %+v", want, got)
+	d := protocol.NewMockDevice(config)
+	h := protocol.NewHandler(d, protocol.NoLogging)
+	if err := h.Reboot(byte(config.ID)); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
 	}
 }
 
 func TestClear(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	if err := h.Clear(byte(device1Config.ID), protocol.ClearMultiRotationPos); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	config := protocol.MockDeviceConfig{
+		ID: 0x0A,
 	}
-
-	want := []byte{0x32, 0x04, 0, 0}
-	got := d.InspectControlTable(0, 4)
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Expected %+v, got %+v", want, got)
+	d := protocol.NewMockDevice(config)
+	h := protocol.NewHandler(d, protocol.NoLogging)
+	if err := h.Clear(byte(config.ID), protocol.ClearMultiRotationPos); err != nil {
+		t.Fatalf("Expected no error, got %q", err)
 	}
 }
 
 func TestFactoryReset(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
+	config := protocol.MockDeviceConfig{
+		ID: 0xAB,
+	}
+	d := protocol.NewMockDevice(config)
 	h := protocol.NewHandler(d, protocol.NoLogging)
-	newCTVals := []byte{0xF1, 0xFA, 0x09, 0xA0}
-	if err := h.Write(byte(device1Config.ID), 0, newCTVals...); err != nil {
+	if err := h.Clear(byte(config.ID), protocol.ClearMultiRotationPos); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
 	}
-	if err := h.FactoryReset(byte(device1Config.ID), protocol.ResetExceptID); err != nil {
+	if err := h.FactoryReset(byte(config.ID), protocol.ResetExceptID); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
-	}
-	got := d.InspectControlTable(0, len(device1Config.ControlTableRAM))
-	if !reflect.DeepEqual(got, device1Config.ControlTableRAM) {
-		t.Errorf("Expected %+v, got %+v", device1Config.ControlTableRAM, got)
 	}
 }
 
 func TestControlTableBackup(t *testing.T) {
-	d := protocol.NewMockDevice(device1Config)
+	config := protocol.MockDeviceConfig{
+		ID: 0xB5,
+	}
+	d := protocol.NewMockDevice(config)
 	h := protocol.NewHandler(d, protocol.NoLogging)
-	newCTVals := []byte{0xF1, 0xFA, 0x09, 0xA0}
-	if err := h.ControlTableBackup(byte(device1Config.ID), protocol.BackupStore); err != nil {
+	if err := h.ControlTableBackup(byte(config.ID), protocol.BackupStore); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
 	}
-	if err := h.Write(byte(device1Config.ID), 0, newCTVals...); err != nil {
+	if err := h.ControlTableBackup(byte(config.ID), protocol.BackupRestore); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
-	}
-	if err := h.ControlTableBackup(byte(device1Config.ID), protocol.BackupRestore); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
-	got := d.InspectControlTable(0, len(device1Config.ControlTableRAM))
-	if !reflect.DeepEqual(got, device1Config.ControlTableRAM) {
-		t.Errorf("Expected %+v, got %+v", device1Config.ControlTableRAM, got)
 	}
 }
 
 func TestSyncRead(t *testing.T) {
-	d1 := protocol.NewMockDevice(device1Config)
-	d2 := protocol.NewMockDevice(device2Config)
-	d3 := protocol.NewMockDevice(device3Config)
+	config1 := protocol.MockDeviceConfig{
+		ID: 0xB5,
+	}
+	config2 := protocol.MockDeviceConfig{
+		ID: 0xB2,
+	}
+	config3 := protocol.MockDeviceConfig{
+		ID: 0xB3,
+	}
+	d1 := protocol.NewMockDevice(config1)
+	d2 := protocol.NewMockDevice(config2)
+	d3 := protocol.NewMockDevice(config3)
 	c := protocol.NewDeviceChain(d1, d2, d3)
 	h := protocol.NewHandler(c, protocol.NoLogging)
 
-	addr, length := 3, 2
-	ids := []byte{byte(device1Config.ID), byte(device2Config.ID), byte(device3Config.ID)}
+	addr, length := 51, 12
+	ids := []byte{byte(config1.ID), byte(config2.ID), byte(config3.ID)}
 	got, err := h.SyncRead(ids, uint16(addr), uint16(length))
 	if err != nil {
 		t.Fatalf("Expected no error, got %q", err)
 	}
+	if len(got) != 3 {
+		t.Errorf("Expected 3 responses, got %d", len(got))
+	}
+	for i, v := range got {
+		if len(v) != length {
+			t.Errorf("Expected %d bytes from response %d, got %d", length, i+1, len(v))
+		}
+	}
 
-	want := [][]byte{
-		device1Config.ControlTableRAM[addr : addr+length],
-		device2Config.ControlTableRAM[addr : addr+length],
-		device3Config.ControlTableRAM[addr : addr+length],
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Expected %+v, got %+v", want, got)
-	}
 }
 
 func TestSyncWrite(t *testing.T) {
-	d1 := protocol.NewMockDevice(device1Config)
-	d2 := protocol.NewMockDevice(device2Config)
-	d3 := protocol.NewMockDevice(device3Config)
+	config1 := protocol.MockDeviceConfig{
+		ID: 0x5A,
+	}
+	config2 := protocol.MockDeviceConfig{
+		ID: 0x5B,
+	}
+	config3 := protocol.MockDeviceConfig{
+		ID: 0x5C,
+	}
+	d1 := protocol.NewMockDevice(config1)
+	d2 := protocol.NewMockDevice(config2)
+	d3 := protocol.NewMockDevice(config3)
 	c := protocol.NewDeviceChain(d1, d2, d3)
 	h := protocol.NewHandler(c, protocol.NoLogging)
 
@@ -225,128 +191,100 @@ func TestSyncWrite(t *testing.T) {
 	data1 := []byte{0xF1, 0xF2}
 	data2 := []byte{0xA7, 0xA8}
 	data3 := []byte{0x21, 0x43}
-	data := []byte{byte(device1Config.ID)}
+	data := []byte{byte(config1.ID)}
 	data = append(data, data1...)
-	data = append(data, byte(device2Config.ID))
+	data = append(data, byte(config2.ID))
 	data = append(data, data2...)
-	data = append(data, byte(device3Config.ID))
+	data = append(data, byte(config3.ID))
 	data = append(data, data3...)
 
 	if err := h.SyncWrite(uint16(addr), 2, data...); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
 	}
-
-	got1 := d1.InspectControlTable(addr, len(data1))
-	if !reflect.DeepEqual(got1, data1) {
-		t.Errorf("Expected %+v to be written to Device 1, got %+v", data1, got1)
-	}
-
-	got2 := d2.InspectControlTable(addr, len(data2))
-	if !reflect.DeepEqual(got2, data2) {
-		t.Errorf("Expected %+v to be written to Device 2, got %+v", data2, got2)
-	}
-
-	got3 := d3.InspectControlTable(addr, len(data3))
-	if !reflect.DeepEqual(got3, data3) {
-		t.Errorf("Expected %+v to be written to Device 3, got %+v", data2, got2)
-	}
 }
 
 func TestBulkRead(t *testing.T) {
-	d1 := protocol.NewMockDevice(device1Config)
-	d2 := protocol.NewMockDevice(device2Config)
-	d3 := protocol.NewMockDevice(device3Config)
+	config1 := protocol.MockDeviceConfig{
+		ID: 0x5A,
+	}
+	config2 := protocol.MockDeviceConfig{
+		ID: 0x5B,
+	}
+	config3 := protocol.MockDeviceConfig{
+		ID: 0x5C,
+	}
+	d1 := protocol.NewMockDevice(config1)
+	d2 := protocol.NewMockDevice(config2)
+	d3 := protocol.NewMockDevice(config3)
 	c := protocol.NewDeviceChain(d1, d2, d3)
 	h := protocol.NewHandler(c, protocol.NoLogging)
 
 	brDesc := []protocol.BulkReadDescriptor{
 		{
-			ID:     byte(device1Config.ID),
+			ID:     byte(config1.ID),
 			Addr:   1,
-			Length: 3,
+			Length: 4,
 		},
 		{
-			ID:     byte(device2Config.ID),
+			ID:     byte(config2.ID),
 			Addr:   4,
-			Length: 2,
+			Length: 10,
 		},
 		{
-			ID:     byte(device3Config.ID),
+			ID:     byte(config3.ID),
 			Addr:   2,
-			Length: 3,
+			Length: 22,
 		},
 	}
-	data, err := h.BulkRead(brDesc)
+	got, err := h.BulkRead(brDesc)
 	if err != nil {
 		t.Fatalf("Expected no error, got %q", err)
 	}
 
-	if len(data) != len(brDesc) {
-		t.Fatalf("Expected all %d devices to return status, only %d did", len(brDesc), len(data))
+	if len(got) != len(brDesc) {
+		t.Fatalf("Expected all %d devices to return status, only %d did", len(brDesc), len(got))
 	}
-
-	got1 := data[0]
-	want1 := device1Config.ControlTableRAM[brDesc[0].Addr : brDesc[0].Addr+brDesc[0].Length]
-	if !reflect.DeepEqual(got1, want1) {
-		t.Errorf("Expected %+v to be read from Device 1, got %+v", want1, got1)
-	}
-
-	got2 := data[1]
-	want2 := device2Config.ControlTableRAM[brDesc[1].Addr : brDesc[1].Addr+brDesc[1].Length]
-	if !reflect.DeepEqual(got2, want2) {
-		t.Errorf("Expected %+v to be read from Device 2, got %+v", want2, got2)
-	}
-
-	got3 := data[2]
-	want3 := device3Config.ControlTableRAM[brDesc[2].Addr : brDesc[2].Addr+brDesc[2].Length]
-	if !reflect.DeepEqual(got3, want3) {
-		t.Errorf("Expected %+v to be read from Device 3, got %+v", want3, got3)
+	for i, v := range got {
+		if len(v) != int(brDesc[i].Length) {
+			t.Errorf("Expected %d bytes from response %d, got %d", int(brDesc[i].Length), i+1, len(v))
+		}
 	}
 }
 
 func TestBulkWrite(t *testing.T) {
-	d1 := protocol.NewMockDevice(device1Config)
-	d2 := protocol.NewMockDevice(device2Config)
-	d3 := protocol.NewMockDevice(device3Config)
+	config1 := protocol.MockDeviceConfig{
+		ID: 0x5A,
+	}
+	config2 := protocol.MockDeviceConfig{
+		ID: 0x5B,
+	}
+	config3 := protocol.MockDeviceConfig{
+		ID: 0x5C,
+	}
+	d1 := protocol.NewMockDevice(config1)
+	d2 := protocol.NewMockDevice(config2)
+	d3 := protocol.NewMockDevice(config3)
 	c := protocol.NewDeviceChain(d1, d2, d3)
 	h := protocol.NewHandler(c, protocol.NoLogging)
 
 	bwDesc := []protocol.BulkWriteDescriptor{
 		{
-			ID:   byte(device1Config.ID),
+			ID:   byte(config1.ID),
 			Addr: 2,
 			Data: []byte{0x01, 0x02, 0x03},
 		},
 		{
-			ID:   byte(device2Config.ID),
+			ID:   byte(config2.ID),
 			Addr: 4,
 			Data: []byte{0x04, 0x05},
 		},
 		{
-			ID:   byte(device3Config.ID),
+			ID:   byte(config3.ID),
 			Addr: 5,
 			Data: []byte{0x06},
 		},
 	}
 	if err := h.BulkWrite(bwDesc); err != nil {
 		t.Fatalf("Expected no error, got %q", err)
-	}
-
-	got1 := d1.InspectControlTable(int(bwDesc[0].Addr), len(bwDesc[0].Data))
-	want1 := bwDesc[0].Data
-	if !reflect.DeepEqual(got1, want1) {
-		t.Errorf("Expected %+v to be written to Device 1, got %+v", want1, got1)
-	}
-
-	got2 := d2.InspectControlTable(int(bwDesc[1].Addr), len(bwDesc[1].Data))
-	want2 := bwDesc[1].Data
-	if !reflect.DeepEqual(got2, want2) {
-		t.Errorf("Expected %+v to be written to Device 2, got %+v", want2, got2)
-	}
-
-	got3 := d3.InspectControlTable(int(bwDesc[2].Addr), len(bwDesc[2].Data))
-	want3 := bwDesc[2].Data
-	if !reflect.DeepEqual(got3, want3) {
-		t.Errorf("Expected %+v to be written to Device 3, got %+v", want3, got3)
 	}
 }

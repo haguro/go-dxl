@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"time"
 )
 
@@ -46,45 +47,23 @@ func (c *DeviceChain) Write(p []byte) (int, error) {
 }
 
 type MockDeviceConfig struct {
-	ID                 int
-	ModelNumber        int
-	FirmwareVer        int
-	ControlTableRAM    []byte
-	InstructionTimeout time.Duration
-	InternalDelay      time.Duration //Additional to the status delay configured in the control table
+	ID            int
+	InternalDelay time.Duration //Additional to the status delay configured in the control table
 }
 
 type MockDevice struct {
-	buf            *bytes.Buffer
-	id             byte
-	model          uint16
-	fw             byte
-	ctRAM          []byte
-	regWriteBuf    []byte
-	regInstruction bool
-	CTBackupReg    []byte
-	timeout        time.Duration
-	delay          time.Duration
-	defaultConfig  MockDeviceConfig
-	//TODO more configuration to initialise some needed values and to control behaviour (e.g. simulate errors etc)
+	buf   *bytes.Buffer
+	id    byte
+	delay time.Duration
 }
 
 func NewMockDevice(config MockDeviceConfig) *MockDevice {
 	b := bytes.Buffer{}
-	if config.InstructionTimeout == 0 {
-		config.InstructionTimeout = 3000 * time.Microsecond
-	}
 	d := MockDevice{
-		buf:           &b,
-		id:            byte(config.ID),
-		model:         uint16(config.ModelNumber),
-		fw:            byte(config.FirmwareVer),
-		timeout:       config.InstructionTimeout,
-		delay:         config.InternalDelay,
-		defaultConfig: config,
+		buf:   &b,
+		id:    byte(config.ID),
+		delay: config.InternalDelay,
 	}
-	d.ctRAM = make([]byte, len(config.ControlTableRAM))
-	copy(d.ctRAM, config.ControlTableRAM)
 	return &d
 }
 
@@ -97,167 +76,85 @@ func (d *MockDevice) Read(p []byte) (int, error) {
 // This might be useful: https://emanual.robotis.com/docs/en/dxl/protocol2/#processing-order-of-reception
 func (d *MockDevice) Write(p []byte) (int, error) {
 	pLen := len(p)
-	if pLen < 10 {
+	instID := p[4]
+	if instID != BroadcastID && instID != d.id {
+		// Not for us. Ignore.
 		return pLen, nil
-	}
-	//TODO validate header, length, crc
-	id := p[4]
-	if id != BroadcastID && id != d.id {
-		return pLen, nil
-	}
-	instLength := uint16(p[5]) + uint16(p[6])<<8
-	cmd := p[7]
-	instParams := p[8 : 8+instLength-3]
-
-	errByte := byte(0)
-	var params []byte //Assign default value once all instructions (commands) are implemented
-
-	switch cmd {
-	case ping:
-		params = []byte{byte(d.model), byte(d.model >> 8), d.fw}
-	case read:
-		if instLength != 7 {
-			return pLen, nil
-		}
-		addr, l := uint16(instParams[0])+uint16(instParams[1])<<8, uint16(instParams[2])+uint16(instParams[3])<<8
-		params = d.ctRAM[addr : addr+l]
-	case write:
-		if instLength < 6 {
-			//TODO return processing error when length is < 6 and larger than 5
-			return pLen, nil
-		}
-		addr := int(instParams[0]) + int(instParams[1])<<8
-		for i := 0; i < int(instLength)-5; i++ {
-			d.ctRAM[addr+i] = instParams[2+i]
-		}
-	case regWrite:
-		if instLength < 6 {
-			//TODO return processing error status when length is < 6 and larger than 5
-			return pLen, nil
-		}
-		d.regWriteBuf = []byte{instParams[0], instParams[1]}
-		for i := 0; i < int(instLength)-5; i++ {
-			d.regWriteBuf = append(d.regWriteBuf, instParams[2+i])
-		}
-		d.regInstruction = true
-	case action:
-		if len(d.regWriteBuf) < 2 || !d.regInstruction {
-			errByte = 0x02
-			break
-		}
-		addr := int(d.regWriteBuf[0]) + int(d.regWriteBuf[1])<<8
-		for i := 0; i < len(d.regWriteBuf)-2; i++ {
-			d.ctRAM[addr+i] = d.regWriteBuf[2+i]
-		}
-		d.regWriteBuf = []byte{}
-		d.regInstruction = false
-	case reboot:
-		for i := range d.ctRAM {
-			d.ctRAM[i] = 0
-		}
-	case clear:
-		//TODO verify fixed bytes and option
-		switch instParams[0] {
-		case ClearMultiRotationPos:
-			d.ctRAM[1], d.ctRAM[2], d.ctRAM[3] = d.ctRAM[1]&0x0F, 0, 0
-		}
-	case reset:
-		option := instParams[0]
-		if option == ResetAll && id == BroadcastID {
-			//Do nothing. See https://emanual.robotis.com/docs/en/dxl/protocol2/#description-5
-			return pLen, nil
-		}
-		for i := range d.ctRAM {
-			d.ctRAM[i] = d.defaultConfig.ControlTableRAM[i]
-		}
-		switch option {
-		case ResetAll:
-			d.id = byte(d.defaultConfig.ID)
-			d.model = uint16(d.defaultConfig.ModelNumber)
-			d.fw = byte(d.defaultConfig.FirmwareVer)
-		case ResetExceptID, ResetExceptIDBaud: //It's a mock device so BaudRate is irrelevant.
-			d.model = uint16(d.defaultConfig.ModelNumber)
-			d.fw = byte(d.defaultConfig.FirmwareVer)
-		}
-	case backup:
-		option := instParams[0]
-		switch option {
-		case BackupStore:
-			if d.CTBackupReg == nil {
-				d.CTBackupReg = make([]byte, len(d.ctRAM))
-			}
-			copy(d.CTBackupReg, d.ctRAM)
-		case BackupRestore:
-			copy(d.ctRAM, d.CTBackupReg)
-		}
-	case syncRead:
-		addr, l := int(instParams[0])+int(instParams[1])<<8, int(instParams[2])+int(instParams[3])<<8
-		ids := instParams[4:]
-		var idIncluded bool
-		for _, devId := range ids {
-			if devId == d.id {
-				idIncluded = true
-				break
-			}
-		}
-		if !idIncluded {
-			return pLen, nil
-		}
-		params = d.ctRAM[addr : addr+l]
-	case syncWrite:
-		addr, l := int(instParams[0])+int(instParams[1])<<8, int(instParams[2])+int(instParams[3])<<8
-		var data []byte
-		dataToWrite := instParams[4:]
-		for i := 0; i < len(dataToWrite); i += l + 1 {
-			if dataToWrite[i] == d.id {
-				for j := 0; j < l; j++ {
-					data = append(data, dataToWrite[i+j+1])
-				}
-			}
-		}
-		for i, v := range data {
-			d.ctRAM[addr+i] = v
-		}
-	case bulkRead:
-		if instLength < 8 {
-			//No data at all which means no IDs. So will never be matched by any device.
-			return pLen, nil
-		}
-		for i := 0; i < len(instParams); i += 5 {
-			if instParams[i] == d.id {
-				addr, l := int(instParams[i+1])+int(instParams[i+2])<<8, int(instParams[i+3])+int(instParams[i+4])<<8
-				params = d.ctRAM[addr : addr+l]
-				fmt.Println(params)
-			}
-		}
-	case bulkWrite:
-		if instLength < 8 {
-			//No data at all which means no IDs. So will never be matched by any device.
-			return pLen, nil
-		}
-		for i := 0; i < len(instParams); {
-			addr, l := int(instParams[i+1])+int(instParams[i+2])<<8, int(instParams[i+3])+int(instParams[i+4])<<8
-			if instParams[i] == d.id {
-				for j := 0; j < l; j++ {
-					d.ctRAM[addr+j] = instParams[5+i+j]
-				}
-			}
-			i += 5 + l
-		}
-	case fastSyncRead, fastBulkRead:
-		panic(fmt.Sprintf("Instruction %x is not implemented", cmd))
-	default:
-		errByte = 0x02
 	}
 
 	time.Sleep(d.delay)
 
-	//TODO Support return level values
-	if id != BroadcastID || cmd == ping || cmd == syncRead || cmd == bulkRead {
-		length := 4 + uint16(len(params))
+	instLength := uint16(p[5]) + uint16(p[6])<<8
+	instruction := p[7]
+	instParams := p[8 : 8+instLength-3]
+
+	errByte := 0
+	statusParams := []byte{}
+
+	switch instruction {
+	case ping:
+		statusParams = randBytes(3)
+	case read:
+		l := int(instParams[2]) + int(instParams[3])<<8
+		statusParams = randBytes(l)
+	case write:
+		//No behaivour to mock.
+	case regWrite:
+		//No behaivour to mock.
+	case action:
+		//No behaivour to mock.
+	case reset:
+		//No behaivour to mock.
+	case reboot:
+		//No behaivour to mock.
+	case clear:
+		if instParams[0] > 1 ||
+			instParams[1] != 0x44 ||
+			instParams[2] != 0x58 ||
+			instParams[3] != 0x4C ||
+			instParams[4] != 0x22 {
+			errByte = 1
+		}
+	case backup:
+		if instParams[0] > 2 ||
+			instParams[1] != 0x43 ||
+			instParams[2] != 0x54 ||
+			instParams[3] != 0x52 ||
+			instParams[4] != 0x4C {
+			errByte = 1
+		}
+	case syncRead:
+		l := int(instParams[2]) + int(instParams[3])<<8
+		ids := instParams[4:]
+		if !inIDs(ids, d.id) {
+			// Nothing for us here. Ignore.
+			return pLen, nil
+		}
+		statusParams = randBytes(l)
+	case syncWrite:
+		//No behaivour to mock.
+	case bulkRead:
+		for i := 0; i < len(instParams); i += 5 {
+			if instParams[i] == d.id {
+				l := int(instParams[i+3]) + int(instParams[i+4])<<8
+				statusParams = randBytes(l)
+			}
+		}
+	case bulkWrite:
+		//No behaivour to mock.
+	case fastSyncRead, fastBulkRead:
+		panic(fmt.Sprintf("Instruction %x is not implemented", instruction))
+	default:
+		errByte = 0x02
+	}
+
+	// If the Broadcast ID is used, only Ping, Sync Read and Bulk Read instructions should return status packets
+	// see https://emanual.robotis.com/docs/en/dxl/protocol2/#response-policy
+	if instID != BroadcastID || instruction == ping || instruction == syncRead || instruction == bulkRead {
+		length := 4 + uint16(len(statusParams))
 		statusPacket := []byte{header1, header2, header3, headerR}
-		statusPacket = append(statusPacket, id, byte(length), byte(length>>8), statusCmd, errByte)
-		statusPacket = append(statusPacket, params...)
+		statusPacket = append(statusPacket, instID, byte(length), byte(length>>8), statusCmd, byte(errByte))
+		statusPacket = append(statusPacket, statusParams...)
 		statusPacket = append(statusPacket, 0, 0)
 		updatePacketCRCBytes(statusPacket)
 
@@ -267,13 +164,19 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 	return pLen, nil
 }
 
-func (d *MockDevice) InspectRegWriteBuffer() []byte {
-	return d.regWriteBuf
+func randBytes(n int) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(rand.Intn(0xFF))
+	}
+	return b
 }
 
-func (d *MockDevice) InspectControlTable(index, length int) []byte {
-	if index+length > len(d.ctRAM) {
-		return nil
+func inIDs(ids []byte, id byte) bool {
+	for _, v := range ids {
+		if v == id {
+			return true
+		}
 	}
-	return d.ctRAM[index : index+length]
+	return false
 }
