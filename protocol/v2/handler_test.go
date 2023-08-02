@@ -2,6 +2,7 @@ package protocol_test
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/haguro/go-dxl/protocol/v2"
@@ -19,122 +20,527 @@ func TestFlush(t *testing.T) {
 		t.Errorf("Expected buffer to be empty, got %d elements", b.Len())
 	}
 }
-
 func TestPing(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0x99,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
+	deviceID := 0x99
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
 
-	_, err := h.Ping(byte(config.ID))
-	if err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+			_, err := h.Ping(byte(deviceID))
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestRead(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0x01,
+	var testCases = []struct {
+		name            string
+		deviceID        byte
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name:     "No errors",
+			deviceID: 0xEA,
+		},
+		{
+			name:      "ReadStatus error with Broadcast ID",
+			deviceID:  protocol.BroadcastID,
+			expectErr: protocol.ErrNoStatusOnBroadcast,
+		},
+		{
+			name:            "Device Error",
+			deviceID:        0xEA,
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			deviceID:  0xEA,
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			deviceID:   0xEA,
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr, length := 3, 8
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              int(tc.deviceID),
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			addr, length := 3, 8
 
-	got, err := h.Read(byte(config.ID), uint16(addr), uint16(length))
-	if err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
+			got, err := h.Read(tc.deviceID, uint16(addr), uint16(length))
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
 
-	if len(got) != length {
-		t.Errorf("Expected %d bytes, got %d", length, len(got))
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+
+			if len(got) != length {
+				t.Errorf("Expected %d bytes, got %d", length, len(got))
+			}
+		})
 	}
 }
 
 func TestWrite(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0x7A,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr := 2
-	data := []byte{0xF1, 0xF2}
-	if err := h.Write(byte(config.ID), uint16(addr), data...); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	deviceID := 0x7A
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			addr := 2
+			data := []byte{0xF1, 0xF2}
+			err := h.Write(byte(deviceID), uint16(addr), data...)
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestRegWrite(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0xA9,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	addr := 2
-	data := []byte{0xF1, 0xF2}
-	if err := h.RegWrite(byte(config.ID), uint16(addr), data...); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	deviceID := 0x7A
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			addr := 2
+			data := []byte{0xF1, 0xF2}
+			err := h.RegWrite(byte(deviceID), uint16(addr), data...)
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestAction(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0x9D,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	if err := h.Action(byte(config.ID)); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	deviceID := 0x9D
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			err := h.Action(byte(deviceID))
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestReboot(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0xD0,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	if err := h.Reboot(byte(config.ID)); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	deviceID := 0xD0
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			err := h.Reboot(byte(deviceID))
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestClear(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0x0A,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	if err := h.Clear(byte(config.ID), protocol.ClearMultiRotationPos); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	deviceID := 0x0A
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			err := h.Clear(byte(deviceID), protocol.ClearMultiRotationPos)
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestFactoryReset(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0xAB,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	if err := h.Clear(byte(config.ID), protocol.ClearMultiRotationPos); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
-	if err := h.FactoryReset(byte(config.ID), protocol.ResetExceptID); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	deviceID := 0xA7
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			err := h.FactoryReset(byte(deviceID), protocol.ResetExceptID)
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestControlTableBackup(t *testing.T) {
-	config := protocol.MockDeviceConfig{
-		ID: 0xB5,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	d := protocol.NewMockDevice(config)
-	h := protocol.NewHandler(d, protocol.NoLogging)
-	if err := h.ControlTableBackup(byte(config.ID), protocol.BackupStore); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
-	if err := h.ControlTableBackup(byte(config.ID), protocol.BackupRestore); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+	deviceID := 0x7C
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
+				ID:              deviceID,
+				ProcessingError: tc.processingError,
+				ErrorOnRead:     tc.errOnRead,
+				ErrorOnWrite:    tc.errOnWrite,
+			})
+			h := protocol.NewHandler(d, protocol.NoLogging)
+			err := h.ControlTableBackup(byte(deviceID), protocol.BackupStore)
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 

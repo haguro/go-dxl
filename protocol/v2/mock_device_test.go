@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+var ErrMockWriteError = errors.New("mock write error")
+var ErrMockReadError = errors.New("mock read error")
+
 type DeviceChain struct {
 	devices []*MockDevice
 	buf     *bytes.Buffer
@@ -47,27 +50,43 @@ func (c *DeviceChain) Write(p []byte) (int, error) {
 }
 
 type MockDeviceConfig struct {
-	ID            int
-	InternalDelay time.Duration //Additional to the status delay configured in the control table
+	ID              int
+	InternalDelay   time.Duration //Additional to the status delay configured in the control table
+	ProcessingError int
+	ErrorOnRead     bool
+	ErrorOnWrite    bool
 }
 
 type MockDevice struct {
-	buf   *bytes.Buffer
-	id    byte
-	delay time.Duration
+	buf       *bytes.Buffer
+	id        byte
+	delay     time.Duration
+	errorByte byte
+	writeErr  error
+	readErr   error
 }
 
 func NewMockDevice(config MockDeviceConfig) *MockDevice {
 	b := bytes.Buffer{}
 	d := MockDevice{
-		buf:   &b,
-		id:    byte(config.ID),
-		delay: config.InternalDelay,
+		buf:       &b,
+		id:        byte(config.ID),
+		delay:     config.InternalDelay,
+		errorByte: byte(config.ProcessingError),
+	}
+	if config.ErrorOnRead {
+		d.readErr = ErrMockReadError
+	}
+	if config.ErrorOnWrite {
+		d.writeErr = ErrMockWriteError
 	}
 	return &d
 }
 
 func (d *MockDevice) Read(p []byte) (int, error) {
+	if d.readErr != nil {
+		return 0, d.readErr
+	}
 	return d.buf.Read(p)
 }
 
@@ -75,6 +94,9 @@ func (d *MockDevice) Read(p []byte) (int, error) {
 // We should handle partial writes and buffer the data until the entire packet is received or d.timeout is reached/
 // This might be useful: https://emanual.robotis.com/docs/en/dxl/protocol2/#processing-order-of-reception
 func (d *MockDevice) Write(p []byte) (int, error) {
+	if d.writeErr != nil {
+		return 0, d.writeErr
+	}
 	pLen := len(p)
 	instID := p[4]
 	if instID != BroadcastID && instID != d.id {
@@ -88,7 +110,7 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 	instruction := p[7]
 	instParams := p[8 : 8+instLength-3]
 
-	errByte := 0
+	errByte := d.errorByte
 	statusParams := []byte{}
 
 	switch instruction {
@@ -151,10 +173,15 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 	// If the Broadcast ID is used, only Ping, Sync Read and Bulk Read instructions should return status packets
 	// see https://emanual.robotis.com/docs/en/dxl/protocol2/#response-policy
 	if instID != BroadcastID || instruction == ping || instruction == syncRead || instruction == bulkRead {
-		length := 4 + uint16(len(statusParams))
+		var length uint16 = 4
+		if errByte == 0 {
+			length += uint16(len(statusParams))
+		}
 		statusPacket := []byte{header1, header2, header3, headerR}
 		statusPacket = append(statusPacket, instID, byte(length), byte(length>>8), statusCmd, byte(errByte))
-		statusPacket = append(statusPacket, statusParams...)
+		if errByte == 0 {
+			statusPacket = append(statusPacket, statusParams...)
+		}
 		statusPacket = append(statusPacket, 0, 0)
 		updatePacketCRCBytes(statusPacket)
 

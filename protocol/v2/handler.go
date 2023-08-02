@@ -22,8 +22,8 @@ const (
 const ClearMultiRotationPos byte = 0x01
 
 const (
-	BackupStore   byte = 0x01
-	BackupRestore byte = 0x02
+	BackupStore   byte = 0x01 // Create a store a backup of the device's control table in an internal register.
+	BackupRestore byte = 0x02 // Restores an existing device control table backup in an internal register to the current control table.
 )
 
 // Handler provides a high level API for interacting with Dynamixel devices
@@ -34,6 +34,7 @@ type Handler struct {
 	logOpts byte
 }
 
+// PingResponse encapsulates the information returned by a ping instruction.
 type PingResponse struct {
 	ID       byte
 	Model    uint16
@@ -54,6 +55,8 @@ type BulkWriteDescriptor struct {
 	Data []byte
 }
 
+// NewHandler creates a new handler for communicating with Dynamixel devices
+// with Protocol 2.0 support
 func NewHandler(rw io.ReadWriter, logPacketOpts byte) *Handler {
 	return &Handler{
 		rw:      rw,
@@ -203,6 +206,7 @@ func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
 	if err := h.writeInstruction(id, regWrite, params...); err != nil {
 		return fmt.Errorf("failed to send reg write instruction: %w", err)
 	}
+
 	if id != BroadcastID {
 		r, err := h.readStatus()
 		if err != nil {
