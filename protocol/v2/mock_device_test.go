@@ -50,29 +50,32 @@ func (c *DeviceChain) Write(p []byte) (int, error) {
 }
 
 type MockDeviceConfig struct {
-	ID              int
-	InternalDelay   time.Duration //Additional to the status delay configured in the control table
-	ProcessingError int
-	ErrorOnRead     bool
-	ErrorOnWrite    bool
+	ID                 int
+	InternalDelay      time.Duration //Additional to the status delay configured in the control table
+	ProcessingError    int
+	ErrorOnRead        bool
+	ErrorOnWrite       bool
+	SimWrongParamCount bool
 }
 
 type MockDevice struct {
-	buf       *bytes.Buffer
-	id        byte
-	delay     time.Duration
-	errorByte byte
-	writeErr  error
-	readErr   error
+	buf             *bytes.Buffer
+	id              byte
+	delay           time.Duration
+	errorByte       byte
+	writeErr        error
+	readErr         error
+	wrongParamCount bool
 }
 
 func NewMockDevice(config MockDeviceConfig) *MockDevice {
 	b := bytes.Buffer{}
 	d := MockDevice{
-		buf:       &b,
-		id:        byte(config.ID),
-		delay:     config.InternalDelay,
-		errorByte: byte(config.ProcessingError),
+		buf:             &b,
+		id:              byte(config.ID),
+		delay:           config.InternalDelay,
+		errorByte:       byte(config.ProcessingError),
+		wrongParamCount: config.SimWrongParamCount,
 	}
 	if config.ErrorOnRead {
 		d.readErr = ErrMockReadError
@@ -173,6 +176,15 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 	// If the Broadcast ID is used, only Ping, Sync Read and Bulk Read instructions should return status packets
 	// see https://emanual.robotis.com/docs/en/dxl/protocol2/#response-policy
 	if instID != BroadcastID || instruction == ping || instruction == syncRead || instruction == bulkRead {
+		if d.wrongParamCount {
+			if len(statusParams) > 1 {
+				statusParams = statusParams[:len(statusParams)-1]
+			}
+			if len(statusParams) <= 1 {
+				statusParams = append(statusParams, randBytes(1)...)
+			}
+		}
+
 		var length uint16 = 4
 		if errByte == 0 {
 			length += uint16(len(statusParams))

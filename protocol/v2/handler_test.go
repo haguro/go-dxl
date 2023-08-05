@@ -26,6 +26,7 @@ func TestPing(t *testing.T) {
 		processingError int
 		errOnRead       bool
 		errOnWrite      bool
+		wrongParamCount bool
 		expectErr       error
 	}{
 		{
@@ -46,15 +47,21 @@ func TestPing(t *testing.T) {
 			errOnWrite: true,
 			expectErr:  protocol.ErrMockWriteError,
 		},
+		{
+			name:            "Wrong Status Param Count",
+			wrongParamCount: true,
+			expectErr:       protocol.ErrUnexpectedParamCount,
+		},
 	}
 	deviceID := 0x99
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
-				ID:              deviceID,
-				ProcessingError: tc.processingError,
-				ErrorOnRead:     tc.errOnRead,
-				ErrorOnWrite:    tc.errOnWrite,
+				ID:                 deviceID,
+				ProcessingError:    tc.processingError,
+				ErrorOnRead:        tc.errOnRead,
+				ErrorOnWrite:       tc.errOnWrite,
+				SimWrongParamCount: tc.wrongParamCount,
 			})
 			h := protocol.NewHandler(d, protocol.NoLogging)
 
@@ -84,6 +91,7 @@ func TestRead(t *testing.T) {
 		processingError int
 		errOnRead       bool
 		errOnWrite      bool
+		wrongParamCount bool
 		expectErr       error
 	}{
 		{
@@ -113,14 +121,20 @@ func TestRead(t *testing.T) {
 			errOnWrite: true,
 			expectErr:  protocol.ErrMockWriteError,
 		},
+		{
+			name:            "Wrong Status Param Count",
+			wrongParamCount: true,
+			expectErr:       protocol.ErrUnexpectedParamCount,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
-				ID:              int(tc.deviceID),
-				ProcessingError: tc.processingError,
-				ErrorOnRead:     tc.errOnRead,
-				ErrorOnWrite:    tc.errOnWrite,
+				ID:                 int(tc.deviceID),
+				ProcessingError:    tc.processingError,
+				ErrorOnRead:        tc.errOnRead,
+				ErrorOnWrite:       tc.errOnWrite,
+				SimWrongParamCount: tc.wrongParamCount,
 			})
 			h := protocol.NewHandler(d, protocol.NoLogging)
 			addr, length := 3, 8
@@ -545,152 +559,320 @@ func TestControlTableBackup(t *testing.T) {
 }
 
 func TestSyncRead(t *testing.T) {
-	config1 := protocol.MockDeviceConfig{
-		ID: 0xB5,
+	var testCases = []struct {
+		name            string
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		wrongParamCount bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
+		{
+			name:            "Wrong Status Param Count",
+			wrongParamCount: true,
+			expectErr:       protocol.ErrUnexpectedParamCount,
+		},
 	}
-	config2 := protocol.MockDeviceConfig{
-		ID: 0xB2,
-	}
-	config3 := protocol.MockDeviceConfig{
-		ID: 0xB3,
-	}
-	d1 := protocol.NewMockDevice(config1)
-	d2 := protocol.NewMockDevice(config2)
-	d3 := protocol.NewMockDevice(config3)
-	c := protocol.NewDeviceChain(d1, d2, d3)
-	h := protocol.NewHandler(c, protocol.NoLogging)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config1 := protocol.MockDeviceConfig{
+				ID: 0xB5,
+			}
+			config2 := protocol.MockDeviceConfig{
+				ID: 0xB2,
+			}
+			config3 := protocol.MockDeviceConfig{
+				ID:                 0xB3,
+				ProcessingError:    tc.processingError,
+				ErrorOnRead:        tc.errOnRead,
+				ErrorOnWrite:       tc.errOnWrite,
+				SimWrongParamCount: tc.wrongParamCount,
+			}
+			d1 := protocol.NewMockDevice(config1)
+			d2 := protocol.NewMockDevice(config2)
+			d3 := protocol.NewMockDevice(config3)
+			c := protocol.NewDeviceChain(d1, d2, d3)
+			h := protocol.NewHandler(c, protocol.NoLogging)
 
-	addr, length := 51, 12
-	ids := []byte{byte(config1.ID), byte(config2.ID), byte(config3.ID)}
-	got, err := h.SyncRead(ids, uint16(addr), uint16(length))
-	if err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
-	if len(got) != 3 {
-		t.Errorf("Expected 3 responses, got %d", len(got))
-	}
-	for i, v := range got {
-		if len(v) != length {
-			t.Errorf("Expected %d bytes from response %d, got %d", length, i+1, len(v))
-		}
-	}
+			addr, length := 51, 12
+			ids := []byte{byte(config1.ID), byte(config2.ID), byte(config3.ID)}
+			got, err := h.SyncRead(ids, uint16(addr), uint16(length))
 
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+			if len(got) != 3 {
+				t.Errorf("Expected 3 responses, got %d", len(got))
+			}
+			for i, v := range got {
+				if len(v) != length {
+					t.Errorf("Expected %d bytes from response %d, got %d", length, i+1, len(v))
+				}
+			}
+		})
+	}
 }
 
 func TestSyncWrite(t *testing.T) {
-	config1 := protocol.MockDeviceConfig{
-		ID: 0x5A,
+	var testCases = []struct {
+		name       string
+		errOnRead  bool
+		errOnWrite bool
+		expectErr  error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	config2 := protocol.MockDeviceConfig{
-		ID: 0x5B,
-	}
-	config3 := protocol.MockDeviceConfig{
-		ID: 0x5C,
-	}
-	d1 := protocol.NewMockDevice(config1)
-	d2 := protocol.NewMockDevice(config2)
-	d3 := protocol.NewMockDevice(config3)
-	c := protocol.NewDeviceChain(d1, d2, d3)
-	h := protocol.NewHandler(c, protocol.NoLogging)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config1 := protocol.MockDeviceConfig{
+				ID: 0x5A,
+			}
+			config2 := protocol.MockDeviceConfig{
+				ID:           int(0x5B),
+				ErrorOnRead:  tc.errOnRead,
+				ErrorOnWrite: tc.errOnWrite,
+			}
+			config3 := protocol.MockDeviceConfig{
+				ID: 0x5C,
+			}
+			d1 := protocol.NewMockDevice(config1)
+			d2 := protocol.NewMockDevice(config2)
+			d3 := protocol.NewMockDevice(config3)
+			c := protocol.NewDeviceChain(d1, d2, d3)
+			h := protocol.NewHandler(c, protocol.NoLogging)
 
-	addr := 4
-	data1 := []byte{0xF1, 0xF2}
-	data2 := []byte{0xA7, 0xA8}
-	data3 := []byte{0x21, 0x43}
-	data := []byte{byte(config1.ID)}
-	data = append(data, data1...)
-	data = append(data, byte(config2.ID))
-	data = append(data, data2...)
-	data = append(data, byte(config3.ID))
-	data = append(data, data3...)
+			addr := 4
+			data1 := []byte{0xF1, 0xF2}
+			data2 := []byte{0xA7, 0xA8}
+			data3 := []byte{0x21, 0x43}
+			data := []byte{byte(config1.ID)}
+			data = append(data, data1...)
+			data = append(data, byte(config2.ID))
+			data = append(data, data2...)
+			data = append(data, byte(config3.ID))
+			data = append(data, data3...)
 
-	if err := h.SyncWrite(uint16(addr), 2, data...); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+			err := h.SyncWrite(uint16(addr), 2, data...)
+
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
 
 func TestBulkRead(t *testing.T) {
-	config1 := protocol.MockDeviceConfig{
-		ID: 0x5A,
+	var testCases = []struct {
+		name            string
+		deviceID        byte
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		wrongParamCount bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
+		{
+			name:            "Wrong Status Param Count",
+			wrongParamCount: true,
+			expectErr:       protocol.ErrUnexpectedParamCount,
+		},
 	}
-	config2 := protocol.MockDeviceConfig{
-		ID: 0x5B,
-	}
-	config3 := protocol.MockDeviceConfig{
-		ID: 0x5C,
-	}
-	d1 := protocol.NewMockDevice(config1)
-	d2 := protocol.NewMockDevice(config2)
-	d3 := protocol.NewMockDevice(config3)
-	c := protocol.NewDeviceChain(d1, d2, d3)
-	h := protocol.NewHandler(c, protocol.NoLogging)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config1 := protocol.MockDeviceConfig{
+				ID: 0x5A,
+			}
+			config2 := protocol.MockDeviceConfig{
+				ID: 0x5B,
+			}
+			config3 := protocol.MockDeviceConfig{
+				ID:                 0x5C,
+				ProcessingError:    tc.processingError,
+				ErrorOnRead:        tc.errOnRead,
+				ErrorOnWrite:       tc.errOnWrite,
+				SimWrongParamCount: tc.wrongParamCount,
+			}
+			d1 := protocol.NewMockDevice(config1)
+			d2 := protocol.NewMockDevice(config2)
+			d3 := protocol.NewMockDevice(config3)
+			c := protocol.NewDeviceChain(d1, d2, d3)
+			h := protocol.NewHandler(c, protocol.NoLogging)
 
-	brDesc := []protocol.BulkReadDescriptor{
-		{
-			ID:     byte(config1.ID),
-			Addr:   1,
-			Length: 4,
-		},
-		{
-			ID:     byte(config2.ID),
-			Addr:   4,
-			Length: 10,
-		},
-		{
-			ID:     byte(config3.ID),
-			Addr:   2,
-			Length: 22,
-		},
-	}
-	got, err := h.BulkRead(brDesc)
-	if err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
+			brDesc := []protocol.BulkReadDescriptor{
+				{
+					ID:     byte(config1.ID),
+					Addr:   1,
+					Length: 4,
+				},
+				{
+					ID:     byte(config2.ID),
+					Addr:   4,
+					Length: 10,
+				},
+				{
+					ID:     byte(config3.ID),
+					Addr:   2,
+					Length: 22,
+				},
+			}
+			got, err := h.BulkRead(brDesc)
 
-	if len(got) != len(brDesc) {
-		t.Fatalf("Expected all %d devices to return status, only %d did", len(brDesc), len(got))
-	}
-	for i, v := range got {
-		if len(v) != int(brDesc[i].Length) {
-			t.Errorf("Expected %d bytes from response %d, got %d", int(brDesc[i].Length), i+1, len(v))
-		}
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+
+			if len(got) != len(brDesc) {
+				t.Fatalf("Expected all %d devices to return status, only %d did", len(brDesc), len(got))
+			}
+			for i, v := range got {
+				if len(v) != int(brDesc[i].Length) {
+					t.Errorf("Expected %d bytes from response %d, got %d", int(brDesc[i].Length), i+1, len(v))
+				}
+			}
+		})
 	}
 }
 
 func TestBulkWrite(t *testing.T) {
-	config1 := protocol.MockDeviceConfig{
-		ID: 0x5A,
+	var testCases = []struct {
+		name            string
+		errOnRead       bool
+		errOnWrite      bool
+		wrongParamCount bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
 	}
-	config2 := protocol.MockDeviceConfig{
-		ID: 0x5B,
-	}
-	config3 := protocol.MockDeviceConfig{
-		ID: 0x5C,
-	}
-	d1 := protocol.NewMockDevice(config1)
-	d2 := protocol.NewMockDevice(config2)
-	d3 := protocol.NewMockDevice(config3)
-	c := protocol.NewDeviceChain(d1, d2, d3)
-	h := protocol.NewHandler(c, protocol.NoLogging)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config1 := protocol.MockDeviceConfig{
+				ID: 0x5A,
+			}
+			config2 := protocol.MockDeviceConfig{
+				ID:           0x5B,
+				ErrorOnRead:  tc.errOnRead,
+				ErrorOnWrite: tc.errOnWrite,
+			}
+			config3 := protocol.MockDeviceConfig{
+				ID: 0x5C,
+			}
+			d1 := protocol.NewMockDevice(config1)
+			d2 := protocol.NewMockDevice(config2)
+			d3 := protocol.NewMockDevice(config3)
+			c := protocol.NewDeviceChain(d1, d2, d3)
+			h := protocol.NewHandler(c, protocol.NoLogging)
 
-	bwDesc := []protocol.BulkWriteDescriptor{
-		{
-			ID:   byte(config1.ID),
-			Addr: 2,
-			Data: []byte{0x01, 0x02, 0x03},
-		},
-		{
-			ID:   byte(config2.ID),
-			Addr: 4,
-			Data: []byte{0x04, 0x05},
-		},
-		{
-			ID:   byte(config3.ID),
-			Addr: 5,
-			Data: []byte{0x06},
-		},
-	}
-	if err := h.BulkWrite(bwDesc); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
+			bwDesc := []protocol.BulkWriteDescriptor{
+				{
+					ID:   byte(config1.ID),
+					Addr: 2,
+					Data: []byte{0x01, 0x02, 0x03},
+				},
+				{
+					ID:   byte(config2.ID),
+					Addr: 4,
+					Data: []byte{0x04, 0x05},
+				},
+				{
+					ID:   byte(config3.ID),
+					Addr: 5,
+					Data: []byte{0x06},
+				},
+			}
+			err := h.BulkWrite(bwDesc)
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+			if err == nil && tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+		})
 	}
 }
