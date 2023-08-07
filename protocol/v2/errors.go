@@ -17,6 +17,7 @@ var (
 
 var (
 	ErrInvalidID           = errors.New("invalid device ID")
+	ErrReadTimeout         = errors.New("read wait timeout")
 	ErrTruncatedStatus     = errors.New("status packet truncated")
 	ErrMalformedStatus     = errors.New("malformed status packet")
 	ErrInvalidStatusLength = errors.New("invalid status packet length value")

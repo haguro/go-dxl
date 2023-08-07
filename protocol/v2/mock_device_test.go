@@ -6,21 +6,40 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"sync"
 	"time"
 )
 
 var ErrMockWriteError = errors.New("mock write error")
 var ErrMockReadError = errors.New("mock read error")
 
+// Buffer is a thread-safe version of the Readwriter implementation of bytes.Buffer
+type Buffer struct {
+	b bytes.Buffer
+	m sync.Mutex
+}
+
+func (b *Buffer) Read(p []byte) (n int, err error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.Read(p)
+}
+
+func (b *Buffer) Write(p []byte) (n int, err error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.Write(p)
+}
+
 type DeviceChain struct {
 	devices []*MockDevice
-	buf     *bytes.Buffer
+	buf     *Buffer
 }
 
 func NewDeviceChain(devices ...*MockDevice) *DeviceChain {
 	return &DeviceChain{
 		devices: devices,
-		buf:     &bytes.Buffer{},
+		buf:     &Buffer{},
 	}
 }
 
@@ -28,7 +47,7 @@ func (c *DeviceChain) Read(p []byte) (int, error) {
 	for _, d := range c.devices {
 		_, err := io.Copy(c.buf, d)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if err == io.EOF {
 				continue
 			}
 			return 0, fmt.Errorf("failed to read from device chain: %w", err)
@@ -51,7 +70,8 @@ func (c *DeviceChain) Write(p []byte) (int, error) {
 
 type MockDeviceConfig struct {
 	ID                 int
-	InternalDelay      time.Duration //Additional to the status delay configured in the control table
+	MidPacketDelay     time.Duration //Simulate delay occuring while writing status packet
+	DelayPosition      int
 	ProcessingError    int
 	ErrorOnRead        bool
 	ErrorOnWrite       bool
@@ -59,23 +79,27 @@ type MockDeviceConfig struct {
 }
 
 type MockDevice struct {
-	buf             *bytes.Buffer
+	buf             *Buffer
 	id              byte
-	delay           time.Duration
+	writeDelay      time.Duration
+	delayPos        int
 	errorByte       byte
 	writeErr        error
 	readErr         error
 	wrongParamCount bool
+	padWithGarbage  bool
 }
 
 func NewMockDevice(config MockDeviceConfig) *MockDevice {
-	b := bytes.Buffer{}
+	b := Buffer{}
 	d := MockDevice{
 		buf:             &b,
 		id:              byte(config.ID),
-		delay:           config.InternalDelay,
+		writeDelay:      config.MidPacketDelay,
+		delayPos:        config.DelayPosition,
 		errorByte:       byte(config.ProcessingError),
 		wrongParamCount: config.SimWrongParamCount,
+		padWithGarbage:  true, //Always pad status with garbage to simulate potential leftover bytes or noise in channel
 	}
 	if config.ErrorOnRead {
 		d.readErr = ErrMockReadError
@@ -106,8 +130,6 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		// Not for us. Ignore.
 		return pLen, nil
 	}
-
-	time.Sleep(d.delay)
 
 	instLength := uint16(p[5]) + uint16(p[6])<<8
 	instruction := p[7]
@@ -196,6 +218,20 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		}
 		statusPacket = append(statusPacket, 0, 0)
 		updatePacketCRCBytes(statusPacket)
+
+		if d.padWithGarbage {
+			statusPacket = append(randBytes(rand.Intn(6)), statusPacket...)
+			statusPacket = append(statusPacket, randBytes(rand.Intn(6))...)
+		}
+
+		if d.writeDelay > 0 {
+			d.buf.Write(statusPacket[:d.delayPos])
+			go func() {
+				time.Sleep(d.writeDelay)
+				d.buf.Write(statusPacket[d.delayPos:])
+			}()
+			return pLen, nil
+		}
 
 		d.buf.Write(statusPacket)
 	}

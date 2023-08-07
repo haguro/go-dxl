@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 )
 
 const (
@@ -30,8 +31,9 @@ const (
 // over a communication interface. It handles constructing protocol packets,
 // sending instructions, and parsing status responses.
 type Handler struct {
-	rw      io.ReadWriter
-	logOpts byte
+	rw          io.ReadWriter
+	readTimeout time.Duration
+	logOpts     byte
 }
 
 // PingResponse encapsulates the information returned by a ping instruction.
@@ -57,14 +59,17 @@ type BulkWriteDescriptor struct {
 
 // NewHandler creates a new handler for communicating with Dynamixel devices
 // with Protocol 2.0 support
-func NewHandler(rw io.ReadWriter, logPacketOpts byte) *Handler {
+func NewHandler(rw io.ReadWriter, readTimeout time.Duration, logPacketOpts byte) *Handler {
+	if readTimeout == 0 {
+		readTimeout = 20 * time.Millisecond
+	}
 	return &Handler{
-		rw:      rw,
-		logOpts: logPacketOpts,
+		rw:          rw,
+		readTimeout: readTimeout,
+		logOpts:     logPacketOpts,
 	}
 }
 
-// TODO Thread-safety: Support concurrent use (with mutex?)
 func (h *Handler) writeInstruction(id, command byte, params ...byte) error {
 	inst := &instruction{id, command, params}
 	packet, err := inst.packetBytes()
@@ -81,42 +86,79 @@ func (h *Handler) writeInstruction(id, command byte, params ...byte) error {
 	return nil
 }
 
-// TODO Calling this method should either returns a single status packet if already in the buffer
-// or it waits if the buffer is empty until the a time out occurs (with an error). Basically ignore
-// EOF errors and implement request timeout mechanism.
-// TODO Thread-safety: Support concurrent use (with mutex?)
+func (h *Handler) readWithTimeout(b []byte) (int, error) {
+	var N int
+	timer := time.NewTimer(h.readTimeout)
+	defer timer.Stop()
+	p := make([]byte, 1)
+	for i := 0; i < len(b); i++ {
+		for {
+			n, err := h.rw.Read(p)
+			N += n
+			if err != nil {
+				if err == io.EOF {
+					select {
+					case <-timer.C:
+						return N, ErrReadTimeout
+					default:
+						continue
+					}
+				}
+				return N, err
+			}
+			break
+		}
+		b[i] = p[0]
+	}
+	return N, nil
+}
+
 func (h *Handler) readStatus() (status, error) {
-	packet := make([]byte, 7)
-	n, err := h.rw.Read(packet)
+	var packet []byte
+
+	//Find the header pattern in the stream of bytes
+	for {
+		b := make([]byte, 1)
+		_, err := h.readWithTimeout(b)
+		if err != nil {
+			return status{}, fmt.Errorf("failed to read status packet header: %w", err)
+		}
+
+		packet = append(packet, b[0])
+		hl := len(packet)
+		if hl >= 4 {
+			// Check if the last n bytes match pattern
+			if packet[hl-4] == header1 &&
+				packet[hl-3] == header2 &&
+				packet[hl-2] == header3 &&
+				packet[hl-1] == headerR {
+				// Header found, break out of loop
+				break
+			}
+			// No match, drop first byte and continue
+			packet = packet[1:]
+		}
+	}
+
+	idLength := make([]byte, 3)
+	_, err := h.readWithTimeout(idLength)
 	if err != nil {
-		return status{}, fmt.Errorf("failed to read status packet: %w", err)
+		return status{}, fmt.Errorf("failed to read status packet ID and Length: %w", err)
 	}
-	if n < 7 { //Note this won't be needed once wait/timeout is implemented.
-		return status{}, ErrTruncatedStatus
-	}
-	//TODO header pattern scanner? It would theoretically render the initial Flush call useless!
-	if packet[0] != 0xFF || packet[1] != 0xFF || packet[2] != 0xFD || packet[3] != 0x00 {
-		return status{}, ErrMalformedStatus
-	}
-
-	length := uint16(packet[5]) + uint16(packet[6])<<8
-
+	length := uint16(idLength[1]) + uint16(idLength[2])<<8
 	// It should be impossible for the length value to be less than 4 bytes (instruction, error, crc(low)
 	// and crc(high)).
-	// We have to check this again when parsing the packet but we need to stop early if it where to happen.
+	// We have to check this again when parsing the packet but we need to stop early if it where to somehow happen.
 	if length < 4 {
 		return status{}, ErrInvalidStatusLength
 	}
+	packet = append(packet, idLength...)
 
 	instErrParamsCRC := make([]byte, length) // instruction, error, params and crc bytes
-	n, err = h.rw.Read(instErrParamsCRC)
+	_, err = h.readWithTimeout(instErrParamsCRC)
 	if err != nil {
-		return status{}, fmt.Errorf("failed to read status packet: %w", err)
+		return status{}, fmt.Errorf("failed to read status packet instruction, error, params and crc: %w", err)
 	}
-	if n < int(length) {
-		return status{}, ErrTruncatedStatus
-	}
-
 	packet = append(packet, instErrParamsCRC...)
 
 	if h.logOpts&LogRead != 0 {
@@ -124,11 +166,6 @@ func (h *Handler) readStatus() (status, error) {
 	}
 
 	return parseStatusPacket(packet)
-}
-
-func (h *Handler) Flush() error {
-	_, err := io.Copy(io.Discard, h.rw)
-	return err
 }
 
 func (h *Handler) Ping(id byte) (PingResponse, error) {

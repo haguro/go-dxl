@@ -1,28 +1,18 @@
 package protocol_test
 
 import (
-	"bytes"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/haguro/go-dxl/protocol/v2"
 )
 
-func TestFlush(t *testing.T) {
-	b := bytes.NewBuffer(make([]byte, 10))
-	h := protocol.NewHandler(b, protocol.NoLogging)
-
-	if err := h.Flush(); err != nil {
-		t.Fatalf("Expected no error, got %q", err)
-	}
-
-	if b.Len() != 0 {
-		t.Errorf("Expected buffer to be empty, got %d elements", b.Len())
-	}
-}
 func TestPing(t *testing.T) {
 	var testCases = []struct {
 		name            string
+		packetDelay     time.Duration
+		delayPosition   int
 		processingError int
 		errOnRead       bool
 		errOnWrite      bool
@@ -30,7 +20,17 @@ func TestPing(t *testing.T) {
 		expectErr       error
 	}{
 		{
-			name: "No errors",
+			name: "No errors, whole packet",
+		},
+		{
+			name:          "No errors, delayed packet start",
+			packetDelay:   5 * time.Millisecond,
+			delayPosition: 0,
+		},
+		{
+			name:          "No errors, mid-packet delay",
+			packetDelay:   5 * time.Millisecond,
+			delayPosition: 6,
 		},
 		{
 			name:            "Device Error",
@@ -52,18 +52,32 @@ func TestPing(t *testing.T) {
 			wrongParamCount: true,
 			expectErr:       protocol.ErrUnexpectedParamCount,
 		},
+		{
+			name:          "Read Timeout Error, long initial delay",
+			packetDelay:   15 * time.Millisecond,
+			delayPosition: 0,
+			expectErr:     protocol.ErrReadTimeout,
+		},
+		{
+			name:          "Read Timeout Error, long mid-packet delay",
+			packetDelay:   15 * time.Millisecond,
+			delayPosition: 3,
+			expectErr:     protocol.ErrReadTimeout,
+		},
 	}
 	deviceID := 0x99
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
 				ID:                 deviceID,
+				MidPacketDelay:     tc.packetDelay,
+				DelayPosition:      tc.delayPosition,
 				ProcessingError:    tc.processingError,
 				ErrorOnRead:        tc.errOnRead,
 				ErrorOnWrite:       tc.errOnWrite,
 				SimWrongParamCount: tc.wrongParamCount,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 10*time.Millisecond, protocol.NoLogging)
 
 			_, err := h.Ping(byte(deviceID))
 			if err != nil {
@@ -92,11 +106,25 @@ func TestRead(t *testing.T) {
 		errOnRead       bool
 		errOnWrite      bool
 		wrongParamCount bool
+		packetDelay     time.Duration
+		delayPosition   int
 		expectErr       error
 	}{
 		{
 			name:     "No errors",
 			deviceID: 0xEA,
+		},
+		{
+			name:          "No errors, delayed packet start",
+			deviceID:      0xEA,
+			packetDelay:   10 * time.Millisecond,
+			delayPosition: 0,
+		},
+		{
+			name:          "No errors, mid-packet delay",
+			deviceID:      0xEA,
+			packetDelay:   10 * time.Millisecond,
+			delayPosition: 6,
 		},
 		{
 			name:      "ReadStatus error with Broadcast ID",
@@ -123,20 +151,37 @@ func TestRead(t *testing.T) {
 		},
 		{
 			name:            "Wrong Status Param Count",
+			deviceID:        0xEA,
 			wrongParamCount: true,
 			expectErr:       protocol.ErrUnexpectedParamCount,
+		},
+		{
+			name:          "Read Timeout Error, long initial delay",
+			deviceID:      0xEA,
+			packetDelay:   40 * time.Millisecond,
+			delayPosition: 0,
+			expectErr:     protocol.ErrReadTimeout,
+		},
+		{
+			name:          "Read Timeout Error, long mid-packet delay",
+			deviceID:      0xEA,
+			packetDelay:   50 * time.Millisecond,
+			delayPosition: 6,
+			expectErr:     protocol.ErrReadTimeout,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
 				ID:                 int(tc.deviceID),
+				MidPacketDelay:     tc.packetDelay,
+				DelayPosition:      tc.delayPosition,
 				ProcessingError:    tc.processingError,
 				ErrorOnRead:        tc.errOnRead,
 				ErrorOnWrite:       tc.errOnWrite,
 				SimWrongParamCount: tc.wrongParamCount,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0, protocol.NoLogging)
 			addr, length := 3, 8
 
 			got, err := h.Read(tc.deviceID, uint16(addr), uint16(length))
@@ -168,10 +213,22 @@ func TestWrite(t *testing.T) {
 		processingError int
 		errOnRead       bool
 		errOnWrite      bool
+		packetDelay     time.Duration
+		delayPosition   int
 		expectErr       error
 	}{
 		{
 			name: "No errors",
+		},
+		{
+			name:          "No errors, delayed packet start",
+			packetDelay:   50 * time.Millisecond,
+			delayPosition: 0,
+		},
+		{
+			name:          "No errors, mid-packet delay",
+			packetDelay:   50 * time.Millisecond,
+			delayPosition: 6,
 		},
 		{
 			name:            "Device Error",
@@ -188,17 +245,31 @@ func TestWrite(t *testing.T) {
 			errOnWrite: true,
 			expectErr:  protocol.ErrMockWriteError,
 		},
+		{
+			name:          "Read Timeout Error, long initial delay",
+			packetDelay:   110 * time.Millisecond,
+			delayPosition: 0,
+			expectErr:     protocol.ErrReadTimeout,
+		},
+		{
+			name:          "Read Timeout Error, long mid-packet delay",
+			packetDelay:   110 * time.Millisecond,
+			delayPosition: 9,
+			expectErr:     protocol.ErrReadTimeout,
+		},
 	}
 	deviceID := 0x7A
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := protocol.NewMockDevice(protocol.MockDeviceConfig{
 				ID:              deviceID,
+				MidPacketDelay:  tc.packetDelay,
+				DelayPosition:   tc.delayPosition,
 				ProcessingError: tc.processingError,
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 100*time.Millisecond, protocol.NoLogging)
 			addr := 2
 			data := []byte{0xF1, 0xF2}
 			err := h.Write(byte(deviceID), uint16(addr), data...)
@@ -256,7 +327,7 @@ func TestRegWrite(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0, protocol.NoLogging)
 			addr := 2
 			data := []byte{0xF1, 0xF2}
 			err := h.RegWrite(byte(deviceID), uint16(addr), data...)
@@ -314,7 +385,7 @@ func TestAction(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0, protocol.NoLogging)
 			err := h.Action(byte(deviceID))
 			if err != nil {
 				if tc.expectErr == nil {
@@ -370,7 +441,7 @@ func TestReboot(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0, protocol.NoLogging)
 			err := h.Reboot(byte(deviceID))
 			if err != nil {
 				if tc.expectErr == nil {
@@ -426,7 +497,7 @@ func TestClear(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0, protocol.NoLogging)
 			err := h.Clear(byte(deviceID), protocol.ClearMultiRotationPos)
 			if err != nil {
 				if tc.expectErr == nil {
@@ -482,7 +553,7 @@ func TestFactoryReset(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0, protocol.NoLogging)
 			err := h.FactoryReset(byte(deviceID), protocol.ResetExceptID)
 			if err != nil {
 				if tc.expectErr == nil {
@@ -538,7 +609,7 @@ func TestControlTableBackup(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0, protocol.NoLogging)
 			err := h.ControlTableBackup(byte(deviceID), protocol.BackupStore)
 			if err != nil {
 				if tc.expectErr == nil {
@@ -610,7 +681,7 @@ func TestSyncRead(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0, protocol.NoLogging)
 
 			addr, length := 51, 12
 			ids := []byte{byte(config1.ID), byte(config2.ID), byte(config3.ID)}
@@ -674,7 +745,7 @@ func TestSyncWrite(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0, protocol.NoLogging)
 
 			addr := 4
 			data1 := []byte{0xF1, 0xF2}
@@ -759,7 +830,7 @@ func TestBulkRead(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0, protocol.NoLogging)
 
 			brDesc := []protocol.BulkReadDescriptor{
 				{
@@ -840,7 +911,7 @@ func TestBulkWrite(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0, protocol.NoLogging)
 
 			bwDesc := []protocol.BulkWriteDescriptor{
 				{
