@@ -57,15 +57,13 @@ func (c *DeviceChain) Read(p []byte) (int, error) {
 }
 
 func (c *DeviceChain) Write(p []byte) (int, error) {
-	var t int
 	for _, d := range c.devices {
-		n, err := d.Write(p)
+		_, err := d.Write(p)
 		if err != nil {
 			return 0, fmt.Errorf("failed to write to device chain: %w", err)
 		}
-		t += n
 	}
-	return t, nil
+	return len(p), nil
 }
 
 type MockDeviceConfig struct {
