@@ -3,15 +3,7 @@ package protocol
 import (
 	"fmt"
 	"io"
-	"log"
 	"time"
-)
-
-const (
-	NoLogging byte = 0
-	LogRead   byte = 1 << iota
-	LogWrite
-	LogReadWrite = LogRead | LogWrite
 )
 
 const (
@@ -33,7 +25,6 @@ const (
 type Handler struct {
 	rw          io.ReadWriter
 	readTimeout time.Duration
-	logOpts     byte
 }
 
 // PingResponse encapsulates the information returned by a ping instruction.
@@ -59,14 +50,13 @@ type BulkWriteDescriptor struct {
 
 // NewHandler creates a new handler for communicating with Dynamixel devices
 // with Protocol 2.0 support
-func NewHandler(rw io.ReadWriter, readTimeout time.Duration, logPacketOpts byte) *Handler {
+func NewHandler(rw io.ReadWriter, readTimeout time.Duration) *Handler {
 	if readTimeout == 0 {
 		readTimeout = 20 * time.Millisecond
 	}
 	return &Handler{
 		rw:          rw,
 		readTimeout: readTimeout,
-		logOpts:     logPacketOpts,
 	}
 }
 
@@ -75,9 +65,6 @@ func (h *Handler) writeInstruction(id, command byte, params ...byte) error {
 	packet, err := inst.packetBytes()
 	if err != nil {
 		return fmt.Errorf("failed to create instruction packet: %w", err)
-	}
-	if h.logOpts&LogWrite != 0 {
-		logPacket(packet)
 	}
 	_, err = h.rw.Write(packet)
 	if err != nil {
@@ -160,10 +147,6 @@ func (h *Handler) readStatus() (status, error) {
 		return status{}, fmt.Errorf("failed to read status packet instruction, error, params and crc: %w", err)
 	}
 	packet = append(packet, instErrParamsCRC...)
-
-	if h.logOpts&LogRead != 0 {
-		logPacket(packet)
-	}
 
 	return parseStatusPacket(packet)
 }
@@ -431,15 +414,3 @@ func (h *Handler) BulkWrite(data []BulkWriteDescriptor) error {
 
 // TODO FastSyncRead
 // TODO FastBulkRead
-
-func logPacket(packet []byte) {
-	n := len(packet)
-	inHex := "["
-	for i := 0; i < n; i++ {
-		inHex += fmt.Sprintf("%02X", packet[i])
-		if i < n-1 {
-			inHex += "|"
-		}
-	}
-	log.Println(inHex + "]")
-}

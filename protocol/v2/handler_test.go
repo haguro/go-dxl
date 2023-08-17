@@ -77,7 +77,7 @@ func TestPing(t *testing.T) {
 				ErrorOnWrite:       tc.errOnWrite,
 				SimWrongParamCount: tc.wrongParamCount,
 			})
-			h := protocol.NewHandler(d, 10*time.Millisecond, protocol.NoLogging)
+			h := protocol.NewHandler(d, 10*time.Millisecond)
 
 			_, err := h.Ping(byte(deviceID))
 			if err != nil {
@@ -181,7 +181,7 @@ func TestRead(t *testing.T) {
 				ErrorOnWrite:       tc.errOnWrite,
 				SimWrongParamCount: tc.wrongParamCount,
 			})
-			h := protocol.NewHandler(d, 0, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0)
 			addr, length := 3, 8
 
 			got, err := h.Read(tc.deviceID, uint16(addr), uint16(length))
@@ -269,7 +269,7 @@ func TestWrite(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, 100*time.Millisecond, protocol.NoLogging)
+			h := protocol.NewHandler(d, 100*time.Millisecond)
 			addr := 2
 			data := []byte{0xF1, 0xF2}
 			err := h.Write(byte(deviceID), uint16(addr), data...)
@@ -327,7 +327,7 @@ func TestRegWrite(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, 0, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0)
 			addr := 2
 			data := []byte{0xF1, 0xF2}
 			err := h.RegWrite(byte(deviceID), uint16(addr), data...)
@@ -385,7 +385,7 @@ func TestAction(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, 0, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0)
 			err := h.Action(byte(deviceID))
 			if err != nil {
 				if tc.expectErr == nil {
@@ -441,7 +441,7 @@ func TestReboot(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, 0, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0)
 			err := h.Reboot(byte(deviceID))
 			if err != nil {
 				if tc.expectErr == nil {
@@ -497,7 +497,7 @@ func TestClear(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, 0, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0)
 			err := h.Clear(byte(deviceID), protocol.ClearMultiRotationPos)
 			if err != nil {
 				if tc.expectErr == nil {
@@ -553,7 +553,7 @@ func TestFactoryReset(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, 0, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0)
 			err := h.FactoryReset(byte(deviceID), protocol.ResetExceptID)
 			if err != nil {
 				if tc.expectErr == nil {
@@ -609,7 +609,7 @@ func TestControlTableBackup(t *testing.T) {
 				ErrorOnRead:     tc.errOnRead,
 				ErrorOnWrite:    tc.errOnWrite,
 			})
-			h := protocol.NewHandler(d, 0, protocol.NoLogging)
+			h := protocol.NewHandler(d, 0)
 			err := h.ControlTableBackup(byte(deviceID), protocol.BackupStore)
 			if err != nil {
 				if tc.expectErr == nil {
@@ -681,7 +681,7 @@ func TestSyncRead(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, 0, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0)
 
 			addr, length := 51, 12
 			ids := []byte{byte(config1.ID), byte(config2.ID), byte(config3.ID)}
@@ -745,7 +745,7 @@ func TestSyncWrite(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, 0, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0)
 
 			addr := 4
 			data1 := []byte{0xF1, 0xF2}
@@ -830,7 +830,7 @@ func TestBulkRead(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, 0, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0)
 
 			brDesc := []protocol.BulkReadDescriptor{
 				{
@@ -911,7 +911,7 @@ func TestBulkWrite(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, 0, protocol.NoLogging)
+			h := protocol.NewHandler(c, 0)
 
 			bwDesc := []protocol.BulkWriteDescriptor{
 				{

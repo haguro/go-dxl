@@ -117,9 +117,6 @@ func (d *MockDevice) Read(p []byte) (int, error) {
 	return d.buf.Read(p)
 }
 
-// TODO this assumes that the entire instruction packet is written in one go.
-// We should handle partial writes and buffer the data until the entire packet is received or d.timeout is reached/
-// This might be useful: https://emanual.robotis.com/docs/en/dxl/protocol2/#processing-order-of-reception
 func (d *MockDevice) Write(p []byte) (int, error) {
 	if d.writeErr != nil {
 		return 0, d.writeErr
