@@ -29,7 +29,7 @@ This is an independent project and is not affiliated with or endorsed by ROBOTIS
 
 ## License
 
-This project is licensed under the [License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
 
 ## Warranty
 
