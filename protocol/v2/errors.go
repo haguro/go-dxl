@@ -4,6 +4,8 @@ import (
 	"errors"
 )
 
+// The errors returned by the device if the processing of the instruction fails.
+// See https://emanual.robotis.com/docs/en/dxl/protocol2/#error for more details.
 var (
 	ErrDeviceError      = errors.New("processing error - device error")
 	ErrResultError      = errors.New("processing error - result failed")

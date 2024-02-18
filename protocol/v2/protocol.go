@@ -5,9 +5,8 @@ const (
 	minStatusLengthVal uint16 = 4
 )
 
-// Fixed values, etc
 const (
-	BroadcastID byte = 0xFE
+	BroadcastID byte = 0xFE // The device ID used to broadcast messages
 	header1     byte = 0xFF
 	header2     byte = 0xFF
 	header3     byte = 0xFD

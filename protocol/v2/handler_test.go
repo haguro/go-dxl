@@ -2,6 +2,7 @@ package protocol_test
 
 import (
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -554,7 +555,7 @@ func TestFactoryReset(t *testing.T) {
 				ErrorOnWrite:    tc.errOnWrite,
 			})
 			h := protocol.NewHandler(d, 0)
-			err := h.FactoryReset(byte(deviceID), protocol.ResetExceptID)
+			err := h.FactoryReset(byte(deviceID), protocol.ResetAllExceptID)
 			if err != nil {
 				if tc.expectErr == nil {
 					t.Errorf("Unexpected error: %v", err)
@@ -830,7 +831,8 @@ func TestBulkRead(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			h := protocol.NewHandler(c, 0)
+			l := protocol.NewPacketLogger(c, protocol.LogReadWrite, os.Stderr)
+			h := protocol.NewHandler(l, 0)
 
 			brDesc := []protocol.BulkReadDescriptor{
 				{

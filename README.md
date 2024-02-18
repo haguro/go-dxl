@@ -7,7 +7,7 @@
 ![Tests](https://github.com/haguro/go-dxl/actions/workflows/tests.yml/badge.svg?branch=main&event=push)
 [![codecov](https://codecov.io/gh/haguro/go-dxl/branch/main/graph/badge.svg?token=UM33DSSTAG)](https://codecov.io/gh/haguro/go-dxl)
 [![Go Report Card](https://goreportcard.com/badge/github.com/haguro/go-dxl)](https://goreportcard.com/report/github.com/haguro/go-dxl)
-[![Go Reference](https://pkg.go.dev/badge/github.com/haguro/go-dxl.svg)](https://pkg.go.dev/github.com/haguro/go-dxl)
+[![Go Reference](https://pkg.go.dev/badge/github.com/haguro/go-dxl.svg)](https://pkg.go.dev/github.com/haguro/go-dxl#section-documentation)
 
 go-dxl is a Go library for interfacing with the ROBOTIS Dynamixel® actuators. It aims to include a set of packages to communicate with Dynamixel devices at different levels of abstraction. It currently contains the following packages:
 
