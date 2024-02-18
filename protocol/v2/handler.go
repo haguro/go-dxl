@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	ResetAll          byte = 0xFF // Reset everything in the device control table its default factory value
-	ResetExceptID     byte = 0x01 // Reset everything except the device ID
-	ResetExceptIDBaud byte = 0x02 // Reset everything except the device ID and the Baud Rate
+	ResetAll                byte = 0xFF // Reset everything in the device control table its default factory value
+	ResetAllExceptID        byte = 0x01 // Reset everything except the device ID
+	ResetAllExceptIDAndBaud byte = 0x02 // Reset everything except the device ID and the Baud Rate
 )
 
 const ClearMultiRotationPos byte = 0x01
@@ -34,22 +34,22 @@ type PingResponse struct {
 	Firmware byte
 }
 
-// BulkRDescriptor describes the information required to bulk-read data
+// BulkRDescriptor describes the information required to bulk-read data.
 type BulkReadDescriptor struct {
-	ID     byte
-	Addr   uint16
-	Length uint16
+	ID     byte   //The ID of the device to read from.
+	Addr   uint16 //The starting address to read from.
+	Length uint16 //The number of bytes to read.
 }
 
-// BulkWDescriptor describes the information required to bulk-write data
+// BulkWDescriptor describes the information required to bulk-write data.
 type BulkWriteDescriptor struct {
-	ID   byte
-	Addr uint16
-	Data []byte
+	ID   byte   //The ID of the device to write to.
+	Addr uint16 //The starting address to write to.
+	Data []byte //The data to write.
 }
 
 // NewHandler creates a new handler for communicating with Dynamixel devices
-// with Protocol 2.0 support
+// with Protocol 2.0 support.
 func NewHandler(rw io.ReadWriter, readTimeout time.Duration) *Handler {
 	if readTimeout == 0 {
 		readTimeout = 20 * time.Millisecond
@@ -151,6 +151,8 @@ func (h *Handler) readStatus() (status, error) {
 	return parseStatusPacket(packet)
 }
 
+// Ping sends a `ping` instruction to the device with the given ID to check if it is alive and returns the device's
+// model number and firmware version.
 func (h *Handler) Ping(id byte) (PingResponse, error) {
 	if err := h.writeInstruction(id, ping); err != nil {
 		return PingResponse{}, fmt.Errorf("failed to send ping instruction: %w", err)
@@ -176,6 +178,8 @@ func (h *Handler) Ping(id byte) (PingResponse, error) {
 	}, nil
 }
 
+// Read sends a `read` instruction to the device with the given ID to read a given length of data from the device's
+// control table starting at the given address.
 func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 	if id == BroadcastID {
 		return nil, ErrNoStatusOnBroadcast
@@ -200,6 +204,8 @@ func (h *Handler) Read(id byte, addr, length uint16) (data []byte, err error) {
 	return r.params, nil
 }
 
+// Write sends a `write` instruction to the device with the given ID to write the given data to the given address of
+// the device's control table.
 func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
 	params := []byte{byte(addr), byte(addr >> 8)}
 	params = append(params, data...)
@@ -219,6 +225,8 @@ func (h *Handler) Write(id byte, addr uint16, data ...byte) error {
 	return nil
 }
 
+// RegWrite sends a `register write` instruction to the device with the given ID to register writing the given data to the
+// given address the next time the 'action' instruction is sent to the device.
 func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
 	params := []byte{byte(addr), byte(addr >> 8)}
 	params = append(params, data...)
@@ -239,6 +247,8 @@ func (h *Handler) RegWrite(id byte, addr uint16, data ...byte) error {
 	return nil
 }
 
+// Action sends an `action` instruction to the device with the given ID to write the data in the previously registered instruction
+// (with the `regWrite` instruction) to the device's control table.
 func (h *Handler) Action(id byte) error {
 	if err := h.writeInstruction(id, action); err != nil {
 		return fmt.Errorf("failed to send action instruction: %w", err)
@@ -257,6 +267,7 @@ func (h *Handler) Action(id byte) error {
 	return nil
 }
 
+// Reboot sends a `reboot` instruction to the device with the given ID to reboot the device.
 func (h *Handler) Reboot(id byte) error {
 	if err := h.writeInstruction(id, reboot); err != nil {
 		return fmt.Errorf("failed to send reboot instruction: %w", err)
@@ -275,6 +286,14 @@ func (h *Handler) Reboot(id byte) error {
 	return nil
 }
 
+// FactoryReset sends a `reset` instruction to the device with the given ID to reset the device's control table
+// to its default values.
+// One of the following constants can be passed to the `option` parameter:
+//   - `ResetAll`: Reset all values to their default values.
+//   - `ResetAllExceptID`: Reset all values except the device ID to their default values.
+//   - `ResetAllExceptIDAndBaud`: Reset all values except the device ID and baudrate to their default values.
+//
+// Note that using the `ResetAll` option cannot be used with BroadcastID.
 func (h *Handler) FactoryReset(id, option byte) error {
 	if err := h.writeInstruction(id, reset, option); err != nil {
 		return fmt.Errorf("failed to send reset instruction: %w", err)
@@ -293,6 +312,11 @@ func (h *Handler) FactoryReset(id, option byte) error {
 	return nil
 }
 
+// Clear sends a `clear` instruction to the device with the given ID to clear the device's status packet.
+// The `option` parameter is maintained for future compatiblity. Only the following constants can be passed
+// to the `option` parameter:
+// - `ClearMultiRotationPos`: Resets the Present Position value to an absolute value within one rotation (0-4095).lear the status packet.
+// Note that this can only be applied when the device is stopped.
 func (h *Handler) Clear(id, option byte) error {
 	if err := h.writeInstruction(id, clear, option, 0x44, 0x58, 0x4C, 0x22); err != nil {
 		return fmt.Errorf("failed to send clear instruction: %w", err)
@@ -311,6 +335,14 @@ func (h *Handler) Clear(id, option byte) error {
 	return nil
 }
 
+// ControlTableBackup sends a `backup` instruction to the device with the given ID which can be used to backup or
+// restore the device's control table.
+// The following constants can be passed to the `option` parameter:
+//   - `BackupStore`: Store the current control table in the device's backup area.
+//   - `BackupRestore`: Restore the control table from the device's backup area. The device's control table will be
+//     overwritten and the device will be rebooted.
+//
+// Note that this will only work if the device is in Torque OFF mode.
 func (h *Handler) ControlTableBackup(id byte, option byte) error {
 	if err := h.writeInstruction(id, backup, option, 0x43, 0x54, 0x52, 0x4C); err != nil {
 		return fmt.Errorf("failed to send backup instruction: %w", err)
@@ -329,6 +361,9 @@ func (h *Handler) ControlTableBackup(id byte, option byte) error {
 	return nil
 }
 
+// SyncRead sends a `sync read` instruction to the device(s) with the given IDs to read a given length of data from the
+// given address from each of the device's control tables.
+// Returns a slice of slices of bytes where each inner slice is the data read each the device's control table.
 func (h *Handler) SyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
 	params := []byte{byte(addr), byte(addr >> 8), byte(length), byte(length >> 8)}
 	params = append(params, ids...)
@@ -355,6 +390,8 @@ func (h *Handler) SyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
 	return responses, nil
 }
 
+// SyncWrite sends a `sync write` instruction to the device(s) with the given IDs to write the given data to the
+// given address in each of the device's control tables.
 func (h *Handler) SyncWrite(addr, length uint16, data ...byte) error {
 	params := []byte{byte(addr), byte(addr >> 8), byte(length), byte(length >> 8)}
 	params = append(params, data...)
@@ -366,6 +403,11 @@ func (h *Handler) SyncWrite(addr, length uint16, data ...byte) error {
 	return nil
 }
 
+// BulkRead sends a `bulk read` instruction to one or more devices. This can read data of different lengths from different
+// addresses from different devices.
+// Returns a slice of slices of bytes where each inner slice is the data read from the device. The order of the slices
+// corresponds to the order of each device ID in the `data` slice.
+// Note that each device ID in the `data` can only be used once.
 func (h *Handler) BulkRead(data []BulkReadDescriptor) ([][]byte, error) {
 	params := []byte{}
 	for _, dd := range data {
@@ -395,6 +437,9 @@ func (h *Handler) BulkRead(data []BulkReadDescriptor) ([][]byte, error) {
 	return responses, nil
 }
 
+// BulkWrite sends a `bulk write` instruction to one or more devices. This can write data of different lengths
+// at different addresses to different devices.
+// Note that each device ID in the `data` can only be used once.
 func (h *Handler) BulkWrite(data []BulkWriteDescriptor) error {
 	params := []byte{}
 	for _, dd := range data {
