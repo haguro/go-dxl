@@ -1,6 +1,13 @@
 # Go-DXL
 
-*Note: This library is still in early development. Features and API are subject to change. Use at your own risk.*
+*Note: This library is still in early development. Features and API are subject to (and most definately will) change. Use at your own risk!*
+
+![Go version](https://img.shields.io/badge/go-1.18-blue)
+![License](https://img.shields.io/github/license/haguro/go-dxl)
+![Tests](https://github.com/haguro/go-dxl/actions/workflows/tests.yml/badge.svg?branch=main&event=push)
+[![codecov](https://codecov.io/gh/haguro/go-dxl/branch/main/graph/badge.svg?token=UM33DSSTAG)](https://codecov.io/gh/haguro/go-dxl)
+[![Go Report Card](https://goreportcard.com/badge/github.com/haguro/go-dxl)](https://goreportcard.com/report/github.com/haguro/go-dxl)
+[![Go Reference](https://pkg.go.dev/badge/github.com/haguro/go-dxl.svg)](https://pkg.go.dev/github.com/haguro/go-dxl)
 
 go-dxl is a Go library for interfacing with the ROBOTIS Dynamixel® actuators. It aims to include a set of packages to communicate with Dynamixel devices at different levels of abstraction. It currently contains the following packages:
 
@@ -9,11 +16,11 @@ go-dxl is a Go library for interfacing with the ROBOTIS Dynamixel® actuators. I
 ## Features
 
 - Zero external dependencies: All packages in this library will only ever depend on other packages within this library and/or on the Go standard library.
-- Lightweight: All packages should aim to have minimal memory footprint and computational overhead [Planned]
-- TinyGo support: Whenever possible, the packages shall be designed to support compilation to TinyGo (only for standard targets - microcontroller targets are under consideration and will be decided upon as more packages are added) [Planned]
-- Simple API: The API shall aim to be simple and easy to use while exposing all functionality. [Planned]
-- Abstraction layer support for all Dynamixel servo families: The protocol package will support low level communication for all Dynamixel servo families (AX, MX, XM, XH, PRO/PRO-M) via implementation of the Dynamixel protocol versions 1 [Planned] and 2 [Done]. Higher level packages wil abstract away differences between servo families. [Planned]
-Servo simulator support: Allow simulation of Dynamixel servos and their response to commands without requiring physical hardware. [Planned]
+- Lightweight: All packages should aim to have minimal memory footprint and computational overhead ![Planned][planned]
+- TinyGo support: Whenever possible, the packages shall be designed to support compilation to TinyGo (only for standard targets - microcontroller targets are under consideration and will be decided upon as more packages are added) ![Planned][planned]
+- Simple API: The API shall aim to be simple and easy to use while exposing all functionality. ![Planned][planned]
+- Abstraction layer support for all Dynamixel servo families: The protocol package will support low level communication for all Dynamixel servo families (AX, MX, XM, XH, PRO/PRO-M) via implementation of the Dynamixel protocol versions 1 ![Planned][planned] and 2 ![In Progress][in-progress].
+- Servo simulator support: Allow simulation of Dynamixel servos and their response to commands without requiring physical hardware. ![Planned][planned]
 
 ## Contributing
 
@@ -34,3 +41,6 @@ This project is licensed under the [MIT License](LICENSE).
 ## Warranty
 
 This code library is provided "as is" and without any warranties whatsoever. Use at your own risk. More details in the [LICENSE](LICENSE) file.
+
+[planned]: https://img.shields.io/badge/Planned-48B2CF "Planned"
+[in-progress]: https://img.shields.io/badge/In_Progress-F9D059 "In Progress"
