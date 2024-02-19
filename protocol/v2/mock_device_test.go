@@ -132,6 +132,8 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 
 	errByte := d.errorByte
 	statusParams := []byte{}
+	statusPacket := []byte{}
+	length := 4
 
 	switch instruction {
 	case ping:
@@ -184,7 +186,23 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		}
 	case bulkWrite:
 		//No behaivour to mock.
-	case fastSyncRead, fastBulkRead:
+	case fastSyncRead:
+		l := int(instParams[2]) + int(instParams[3])<<8
+		ids := instParams[4:]
+		if d.id != ids[0] {
+			return pLen, nil
+		}
+		statusParams = append([]byte{d.id}, randBytes(l)...)
+		statusParams = append(statusParams, randBytes(2)...) // TODO: ideally we need to be able to verify the CRC of the EACH of the status packets. For now, we just append two random bytes.
+		for k, id := range ids[1:] {
+			statusParams = append(statusParams, 0, id)
+			statusParams = append(statusParams, randBytes(l)...)
+			if k < len(ids)-2 {
+				statusParams = append(statusParams, randBytes(2)...) //TODO: Random CRC bytes. See above TODO.
+			}
+		}
+
+	case fastBulkRead:
 		panic(fmt.Sprintf("Instruction %x is not implemented", instruction))
 	default:
 		errByte = 0x02
@@ -192,7 +210,7 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 
 	// If the Broadcast ID is used, only Ping, Sync Read and Bulk Read instructions should return status packets
 	// see https://emanual.robotis.com/docs/en/dxl/protocol2/#response-policy
-	if instID != BroadcastID || instruction == ping || instruction == syncRead || instruction == bulkRead {
+	if instID != BroadcastID || instruction == ping || instruction == syncRead || instruction == bulkRead || instruction == fastSyncRead {
 		if d.wrongParamCount {
 			if len(statusParams) > 1 {
 				statusParams = statusParams[:len(statusParams)-1]
@@ -202,11 +220,10 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 			}
 		}
 
-		var length uint16 = 4
 		if errByte == 0 {
-			length += uint16(len(statusParams))
+			length += len(statusParams)
 		}
-		statusPacket := []byte{header1, header2, header3, headerR}
+		statusPacket = append(statusPacket, header1, header2, header3, headerR)
 		statusPacket = append(statusPacket, instID, byte(length), byte(length>>8), statusCmd, byte(errByte))
 		if errByte == 0 {
 			statusPacket = append(statusPacket, statusParams...)
