@@ -457,5 +457,50 @@ func (h *Handler) BulkWrite(data []BulkWriteDescriptor) error {
 	return nil
 }
 
-// TODO FastSyncRead
+func (h *Handler) FastSyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
+	if len(ids) < 1 {
+		return nil, fmt.Errorf("fast sync read requires at least one device ID") //TODO error value
+	}
+
+	params := []byte{byte(addr), byte(addr >> 8), byte(length), byte(length >> 8)}
+	params = append(params, ids...)
+
+	if err := h.writeInstruction(BroadcastID, fastSyncRead, params...); err != nil {
+		return nil, fmt.Errorf("failed to send fast sync read instruction: %w", err)
+	}
+
+	r, err := h.readStatus()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read/parse fast sync read status: %w", err)
+	}
+
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	if len(r.params) != int(length)+(len(ids)-1)*(int(length)+4)+1 {
+		return nil, ErrUnexpectedParamCount //TODO likely need a seeperate error value here for malformed FSR response
+	}
+
+	responses := make([][]byte, len(ids))
+	responses[0] = r.params[1 : int(length)+1]
+	for i := 1; i < len(ids); i++ {
+		responses[i] = r.params[int(length)+5+(i-1)*8 : int(length)+5+(i-1)*8+int(length)]
+	}
+
+	return responses, nil
+}
+
 // TODO FastBulkRead
+// func (h *Handler) FastBulkRead(data []BulkReadDescriptor) ([][]byte, error) {
+// 	params := []byte{}
+// 	for _, dd := range data {
+// 		params = append(params,
+// 			dd.ID, byte(dd.Addr), byte(dd.Addr>>8),
+// 			byte(dd.Length), byte(dd.Length>>8))
+// 	}
+
+// 	if err := h.writeInstruction(BroadcastID, bulkRead, params...); err != nil {
+// 		return nil, fmt.Errorf("failed to send bulk read instruction: %w", err)
+// 	}
+// }
