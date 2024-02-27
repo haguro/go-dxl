@@ -92,7 +92,7 @@ func TestPing(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -197,7 +197,7 @@ func TestRead(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 
@@ -285,7 +285,7 @@ func TestWrite(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -343,7 +343,7 @@ func TestRegWrite(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -399,7 +399,7 @@ func TestAction(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -455,7 +455,7 @@ func TestReboot(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -511,7 +511,7 @@ func TestClear(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -567,7 +567,7 @@ func TestFactoryReset(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -623,7 +623,7 @@ func TestControlTableBackup(t *testing.T) {
 				return
 			}
 
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -698,7 +698,7 @@ func TestSyncRead(t *testing.T) {
 				}
 				return
 			}
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 			if len(got) != 3 {
@@ -771,7 +771,7 @@ func TestSyncWrite(t *testing.T) {
 				}
 				return
 			}
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
@@ -863,7 +863,7 @@ func TestBulkRead(t *testing.T) {
 				}
 				return
 			}
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 
@@ -943,7 +943,7 @@ func TestBulkWrite(t *testing.T) {
 				}
 				return
 			}
-			if err == nil && tc.expectErr != nil {
+			if tc.expectErr != nil {
 				t.Errorf("Expected error but got none")
 			}
 		})
