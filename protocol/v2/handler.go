@@ -457,6 +457,10 @@ func (h *Handler) BulkWrite(data []BulkWriteDescriptor) error {
 	return nil
 }
 
+// FastSyncRead sends a `fast sync read` instruction to the device(s) with the given IDs to read a given length of data from the
+// given address from each of the device's control tables.
+// Returns a slice of slices of bytes where each inner slice is the data read each the device's control table.
+// The signature is identical to `SyncRead` although this is marginally faster
 func (h *Handler) FastSyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
 	if len(ids) < 1 {
 		return nil, fmt.Errorf("fast sync read requires at least one device ID") //TODO error value
@@ -483,9 +487,13 @@ func (h *Handler) FastSyncRead(ids []byte, addr, length uint16) ([][]byte, error
 	}
 
 	responses := make([][]byte, len(ids))
-	responses[0] = r.params[1 : int(length)+1]
+	start := 1
+	end := start + int(length)
+	responses[0] = r.params[start:end]
 	for i := 1; i < len(ids); i++ {
-		responses[i] = r.params[int(length)+5+(i-1)*8 : int(length)+5+(i-1)*8+int(length)]
+		start = end + 4 //Skip the previous CRC bytes as well as the error and ID bytes
+		end = start + int(length)
+		responses[i] = r.params[start:end]
 	}
 
 	return responses, nil
