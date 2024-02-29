@@ -205,14 +205,32 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 		}
 
 	case fastBulkRead:
-		panic(fmt.Sprintf("Instruction %x is not implemented", instruction))
+		if d.id != instParams[0] {
+			return pLen, nil
+		}
+		l := int(instParams[3]) + int(instParams[4])<<8
+		statusParams = append([]byte{d.id}, randBytes(l)...)
+		if len(instParams) > 5 {
+			statusParams = append(statusParams, randBytes(2)...) // TODO: ideally we need to be able to verify the CRC of the EACH of the status packets. For now, we just append two random bytes.
+			for i := 5; i < len(instParams); i += 5 {
+				statusParams = append(statusParams, 0, instParams[i])
+				l = int(instParams[i+3]) + int(instParams[i+4])<<8
+				statusParams = append(statusParams, randBytes(l)...)
+				if i < len(instParams)-7 {
+					statusParams = append(statusParams, randBytes(2)...) //TODO: Random CRC bytes. See above TODO.
+				}
+			}
+		}
+
 	default:
 		errByte = 0x02
 	}
 
 	// If the Broadcast ID is used, only Ping, Sync Read and Bulk Read instructions should return status packets
 	// see https://emanual.robotis.com/docs/en/dxl/protocol2/#response-policy
-	if instID != BroadcastID || instruction == ping || instruction == syncRead || instruction == bulkRead || instruction == fastSyncRead {
+	if instID != BroadcastID || instruction == ping ||
+		instruction == syncRead || instruction == bulkRead ||
+		instruction == fastSyncRead || instruction == fastBulkRead {
 		if d.wrongParamCount {
 			if len(statusParams) > 1 {
 				statusParams = statusParams[:len(statusParams)-1]
