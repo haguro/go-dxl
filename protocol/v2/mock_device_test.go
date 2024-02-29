@@ -193,12 +193,14 @@ func (d *MockDevice) Write(p []byte) (int, error) {
 			return pLen, nil
 		}
 		statusParams = append([]byte{d.id}, randBytes(l)...)
-		statusParams = append(statusParams, randBytes(2)...) // TODO: ideally we need to be able to verify the CRC of the EACH of the status packets. For now, we just append two random bytes.
-		for k, id := range ids[1:] {
-			statusParams = append(statusParams, 0, id)
-			statusParams = append(statusParams, randBytes(l)...)
-			if k < len(ids)-2 {
-				statusParams = append(statusParams, randBytes(2)...) //TODO: Random CRC bytes. See above TODO.
+		if len(ids) > 1 {
+			statusParams = append(statusParams, randBytes(2)...) // TODO: ideally we need to be able to verify the CRC of the EACH of the status packets. For now, we just append two random bytes.
+			for k, id := range ids[1:] {
+				statusParams = append(statusParams, 0, id)
+				statusParams = append(statusParams, randBytes(l)...)
+				if k < len(ids)-2 {
+					statusParams = append(statusParams, randBytes(2)...) //TODO: Random CRC bytes. See above TODO.
+				}
 			}
 		}
 
