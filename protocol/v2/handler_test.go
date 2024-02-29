@@ -2,7 +2,7 @@ package protocol_test
 
 import (
 	"errors"
-	"os"
+	"io"
 	"testing"
 	"time"
 
@@ -831,7 +831,7 @@ func TestBulkRead(t *testing.T) {
 			d2 := protocol.NewMockDevice(config2)
 			d3 := protocol.NewMockDevice(config3)
 			c := protocol.NewDeviceChain(d1, d2, d3)
-			l := protocol.NewPacketLogger(c, protocol.LogReadWrite, os.Stderr)
+			l := protocol.NewPacketLogger(c, protocol.LogReadWrite, io.Discard)
 			h := protocol.NewHandler(l, 0)
 
 			brDesc := []protocol.BulkReadDescriptor{
