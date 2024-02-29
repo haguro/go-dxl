@@ -29,4 +29,5 @@ var (
 var (
 	ErrUnexpectedParamCount = errors.New("unexpected parameter count")
 	ErrNoStatusOnBroadcast  = errors.New("instruction does not respond to Broadcast ID")
+	ErrMinOneIDRequired     = errors.New("at least one ID is required")
 )
