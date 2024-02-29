@@ -463,7 +463,7 @@ func (h *Handler) BulkWrite(data []BulkWriteDescriptor) error {
 // The signature is identical to `SyncRead` although this is marginally faster
 func (h *Handler) FastSyncRead(ids []byte, addr, length uint16) ([][]byte, error) {
 	if len(ids) < 1 {
-		return nil, fmt.Errorf("fast sync read requires at least one device ID") //TODO error value
+		return nil, ErrMinOneIDRequired
 	}
 
 	params := []byte{byte(addr), byte(addr >> 8), byte(length), byte(length >> 8)}
@@ -505,7 +505,7 @@ func (h *Handler) FastSyncRead(ids []byte, addr, length uint16) ([][]byte, error
 // The signature is identical to `BulkRead` although this should be marginally faster
 func (h *Handler) FastBulkRead(data []BulkReadDescriptor) ([][]byte, error) {
 	if len(data) < 1 {
-		return nil, fmt.Errorf("fast bulk read requires at least one device ID") //TODO error value
+		return nil, ErrMinOneIDRequired
 	}
 
 	params := []byte{}
