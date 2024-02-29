@@ -19,7 +19,8 @@ go-dxl is a Go library for interfacing with the ROBOTIS Dynamixel® actuators. I
 - Lightweight: All packages should aim to have minimal memory footprint and computational overhead ![Planned][planned]
 - TinyGo support: Whenever possible, the packages shall be designed to support compilation to TinyGo (only for standard targets - microcontroller targets are under consideration and will be decided upon as more packages are added) ![Planned][planned]
 - Simple API: The API shall aim to be simple and easy to use while exposing all functionality. ![Planned][planned]
-- Abstraction layer support for all Dynamixel servo families: The protocol package will support low level communication for all Dynamixel servo families (AX, MX, XM, XH, PRO/PRO-M) via implementation of the Dynamixel protocol versions 1 ![Planned][planned] and 2 ![In Progress][in-progress].
+- Abstraction layer support for all Dynamixel servo families ![In Progress][in-progress]:
+  - The `protocol` package will support low level communication for all Dynamixel servo families (AX, MX, XM, XH, PRO/PRO-M) via implementation of the Dynamixel protocol version 1 ![Planned][planned] and version 2 ![Complete][complete].
 - Servo simulator support: Allow simulation of Dynamixel servos and their response to commands without requiring physical hardware. ![Planned][planned]
 
 ## Contributing
@@ -44,3 +45,4 @@ This code library is provided "as is" and without any warranties whatsoever. Use
 
 [planned]: https://img.shields.io/badge/Planned-48B2CF "Planned"
 [in-progress]: https://img.shields.io/badge/In_Progress-F9D059 "In Progress"
+[complete]: https://img.shields.io/badge/Complete-80F809 "Complete"

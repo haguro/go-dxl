@@ -1032,3 +1032,103 @@ func TestFastSyncRead(t *testing.T) {
 		})
 	}
 }
+
+func TestFastBulkRead(t *testing.T) {
+	var testCases = []struct {
+		name            string
+		deviceID        byte
+		processingError int
+		errOnRead       bool
+		errOnWrite      bool
+		wrongParamCount bool
+		expectErr       error
+	}{
+		{
+			name: "No errors",
+		},
+		{
+			name:            "Device Error",
+			processingError: 0x80,
+			expectErr:       protocol.ErrDeviceError,
+		},
+		{
+			name:      "Read Error",
+			errOnRead: true,
+			expectErr: protocol.ErrMockReadError,
+		},
+		{
+			name:       "Write Error",
+			errOnWrite: true,
+			expectErr:  protocol.ErrMockWriteError,
+		},
+		{
+			name:            "Wrong Status Param Count",
+			wrongParamCount: true,
+			expectErr:       protocol.ErrUnexpectedParamCount,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config1 := protocol.MockDeviceConfig{
+				ID:                 0x03,
+				ProcessingError:    tc.processingError,
+				ErrorOnRead:        tc.errOnRead,
+				ErrorOnWrite:       tc.errOnWrite,
+				SimWrongParamCount: tc.wrongParamCount,
+			}
+			config2 := protocol.MockDeviceConfig{
+				ID: 0x07,
+			}
+			config3 := protocol.MockDeviceConfig{
+				ID: 0x04,
+			}
+			d1 := protocol.NewMockDevice(config1)
+			d2 := protocol.NewMockDevice(config2)
+			d3 := protocol.NewMockDevice(config3)
+			c := protocol.NewDeviceChain(d1, d2, d3)
+			h := protocol.NewHandler(c, 0)
+
+			brDesc := []protocol.BulkReadDescriptor{
+				{
+					ID:     byte(config1.ID),
+					Addr:   0x0084,
+					Length: 4,
+				},
+				{
+					ID:     byte(config2.ID),
+					Addr:   0x007C,
+					Length: 2,
+				},
+				{
+					ID:     byte(config3.ID),
+					Addr:   0x0092,
+					Length: 1,
+				},
+			}
+			got, err := h.FastBulkRead(brDesc)
+
+			if err != nil {
+				if tc.expectErr == nil {
+					t.Errorf("Unexpected error: %v", err)
+					return
+				}
+				if !errors.Is(err, tc.expectErr) {
+					t.Errorf("Expected error of %q but got type %q", tc.expectErr, err)
+				}
+				return
+			}
+			if tc.expectErr != nil {
+				t.Errorf("Expected error but got none")
+			}
+
+			if len(got) != len(brDesc) {
+				t.Fatalf("Expected all %d devices to return status, only %d did", len(brDesc), len(got))
+			}
+			for i, v := range got {
+				if len(v) != int(brDesc[i].Length) {
+					t.Errorf("Expected %d bytes from response %d, got %d", int(brDesc[i].Length), i+1, len(v))
+				}
+			}
+		})
+	}
+}

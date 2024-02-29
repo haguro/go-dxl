@@ -499,16 +499,53 @@ func (h *Handler) FastSyncRead(ids []byte, addr, length uint16) ([][]byte, error
 	return responses, nil
 }
 
-// TODO FastBulkRead
-// func (h *Handler) FastBulkRead(data []BulkReadDescriptor) ([][]byte, error) {
-// 	params := []byte{}
-// 	for _, dd := range data {
-// 		params = append(params,
-// 			dd.ID, byte(dd.Addr), byte(dd.Addr>>8),
-// 			byte(dd.Length), byte(dd.Length>>8))
-// 	}
+// FastBulkRead sends a `fast bulk read` instruction to the device(s) with the given IDs to read a given length of data from the
+// given address from each of the device's control tables. Lengths and addresses can be different for each device.
+// Returns a slice of slices of bytes where each inner slice is the data read each the device's control table.
+// The signature is identical to `BulkRead` although this should be marginally faster
+func (h *Handler) FastBulkRead(data []BulkReadDescriptor) ([][]byte, error) {
+	if len(data) < 1 {
+		return nil, fmt.Errorf("fast bulk read requires at least one device ID") //TODO error value
+	}
 
-// 	if err := h.writeInstruction(BroadcastID, bulkRead, params...); err != nil {
-// 		return nil, fmt.Errorf("failed to send bulk read instruction: %w", err)
-// 	}
-// }
+	params := []byte{}
+	for _, dd := range data {
+		params = append(params,
+			dd.ID, byte(dd.Addr), byte(dd.Addr>>8),
+			byte(dd.Length), byte(dd.Length>>8))
+	}
+
+	if err := h.writeInstruction(BroadcastID, fastBulkRead, params...); err != nil {
+		return nil, fmt.Errorf("failed to send fast bulk read instruction: %w", err)
+	}
+
+	r, err := h.readStatus()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read/parse fast bulk read status: %w", err)
+	}
+
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	statusParamsLength := int(data[0].Length) + 1
+	for _, dd := range data[1:] {
+		statusParamsLength += int(dd.Length) + 4
+	}
+	if len(r.params) != statusParamsLength {
+		return nil, ErrUnexpectedParamCount //TODO likely need a seeperate error value here for malformed FBR response
+	}
+
+	responses := make([][]byte, len(data))
+	start := 1
+	end := start + int(data[0].Length)
+	responses[0] = r.params[start:end]
+	for i := 1; i < len(data); i++ {
+		start = end + 4 //Skip the previous CRC bytes as well as the error and ID bytes
+		end = start + int(data[i].Length)
+		responses[i] = r.params[start:end]
+	}
+
+	return responses, nil
+
+}
